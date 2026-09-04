@@ -18,6 +18,7 @@ type Screening = {
   status: string;
   screening_date: string | null;
   screening_time: string | null;
+  watch_url: string | null;
 };
 
 type Showtime = {
@@ -33,16 +34,13 @@ export default function AdminPage() {
   const [title, setTitle] = useState("");
   const [file, setFile] =
     useState<File | null>(null);
-
   const [preview, setPreview] =
     useState("");
 
   const [movies, setMovies] =
     useState<Movie[]>([]);
-
   const [screenings, setScreenings] =
     useState<Screening[]>([]);
-
   const [showtimes, setShowtimes] =
     useState<Showtime[]>([]);
 
@@ -52,6 +50,11 @@ export default function AdminPage() {
     );
 
   const [timeValues, setTimeValues] =
+    useState<Record<number, string>>(
+      {}
+    );
+
+  const [watchValues, setWatchValues] =
     useState<Record<number, string>>(
       {}
     );
@@ -85,8 +88,26 @@ export default function AdminPage() {
         ascending: false,
       });
 
-    setScreenings(
-      (data ?? []) as Screening[]
+    const items =
+      (data ?? []) as Screening[];
+
+    setScreenings(items);
+
+    const initialWatchValues:
+      Record<number, string> = {};
+
+    items.forEach(
+      (screening) => {
+        initialWatchValues[
+          screening.id
+        ] =
+          screening.watch_url ??
+          "";
+      }
+    );
+
+    setWatchValues(
+      initialWatchValues
     );
   }
 
@@ -117,18 +138,21 @@ export default function AdminPage() {
   useEffect(() => {
     loadAll();
 
-    const movieChannel = supabase
-      .channel("admin-movies-live")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "movies",
-        },
-        loadMovies
-      )
-      .subscribe();
+    const movieChannel =
+      supabase
+        .channel(
+          "admin-movies-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "movies",
+          },
+          loadMovies
+        )
+        .subscribe();
 
     const screeningChannel =
       supabase
@@ -146,20 +170,21 @@ export default function AdminPage() {
         )
         .subscribe();
 
-    const showtimeChannel = supabase
-      .channel(
-        "admin-showtimes-live"
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "showtimes",
-        },
-        loadShowtimes
-      )
-      .subscribe();
+    const showtimeChannel =
+      supabase
+        .channel(
+          "admin-showtimes-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "showtimes",
+          },
+          loadShowtimes
+        )
+        .subscribe();
 
     return () => {
       supabase.removeChannel(
@@ -294,13 +319,11 @@ export default function AdminPage() {
   async function removeMovie(
     movie: Movie
   ) {
-    if (
-      !confirm(
-        `Delete "${movie.title}"?`
-      )
-    ) {
-      return;
-    }
+    const ok = confirm(
+      `Delete "${movie.title}"?`
+    );
+
+    if (!ok) return;
 
     const { error } =
       await supabase
@@ -332,6 +355,11 @@ export default function AdminPage() {
         screening.id
       ];
 
+    const watchUrl =
+      watchValues[
+        screening.id
+      ]?.trim() || null;
+
     if (
       !date ||
       !time
@@ -345,6 +373,31 @@ export default function AdminPage() {
     setSavingShowtime(
       screening.id
     );
+
+    const {
+      error: watchUrlError,
+    } = await supabase
+      .from("screenings")
+      .update({
+        watch_url:
+          watchUrl,
+      })
+      .eq(
+        "id",
+        screening.id
+      );
+
+    if (
+      watchUrlError
+    ) {
+      setSavingShowtime(null);
+
+      alert(
+        watchUrlError.message
+      );
+
+      return;
+    }
 
     const { error } =
       await supabase
@@ -379,7 +432,7 @@ export default function AdminPage() {
         "",
     });
 
-    await loadShowtimes();
+    await loadAll();
   }
 
   async function deleteShowtime(
@@ -505,10 +558,40 @@ export default function AdminPage() {
         </Link>
       </header>
 
+      {/* CURRENT SCREENING */}
+
       <section className="admin-card">
-        <h2>
-          Current Screening
-        </h2>
+        <div
+          style={{
+            display: "flex",
+            justifyContent:
+              "space-between",
+            alignItems: "center",
+            gap: 16,
+            marginBottom: 22,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: 11,
+                letterSpacing: 2.2,
+                opacity: 0.45,
+                marginBottom: 6,
+              }}
+            >
+              NOW BOOKED
+            </div>
+
+            <h2
+              style={{
+                margin: 0,
+              }}
+            >
+              Current Screening
+            </h2>
+          </div>
+        </div>
 
         {scheduledScreenings.length ===
         0 ? (
@@ -524,11 +607,14 @@ export default function AdminPage() {
                 }
                 style={{
                   display:
-                    "flex",
-                  gap: 16,
+                    "grid",
+                  gridTemplateColumns:
+                    "90px 1fr",
+                  gap: 20,
                   alignItems:
-                    "flex-start",
-                  marginBottom: 22,
+                    "start",
+                  padding:
+                    "18px 0 4px",
                 }}
               >
                 <img
@@ -539,23 +625,20 @@ export default function AdminPage() {
                     screening.movie_title
                   }
                   style={{
-                    width: 82,
-                    height: 123,
+                    width: 90,
+                    aspectRatio:
+                      "2 / 3",
                     objectFit:
                       "cover",
-                    borderRadius: 8,
+                    borderRadius: 10,
                   }}
                 />
 
-                <div
-                  style={{
-                    flex: 1,
-                  }}
-                >
+                <div>
                   <div
-                    className="row-title"
                     style={{
-                      fontSize: 20,
+                      fontSize: 22,
+                      fontWeight: 650,
                       marginBottom: 8,
                     }}
                   >
@@ -565,9 +648,10 @@ export default function AdminPage() {
                   </div>
 
                   <div
-                    className="row-status"
                     style={{
-                      marginBottom: 16,
+                      fontSize: 15,
+                      opacity: 0.72,
+                      marginBottom: 8,
                     }}
                   >
                     {
@@ -579,6 +663,22 @@ export default function AdminPage() {
                       5
                     )}
                   </div>
+
+                  {screening.watch_url && (
+                    <div
+                      style={{
+                        display:
+                          "inline-block",
+                        fontSize: 11,
+                        letterSpacing:
+                          0.5,
+                        opacity: 0.55,
+                        marginBottom: 18,
+                      }}
+                    >
+                      WATCH LINK ADDED ✓
+                    </div>
+                  )}
 
                   <div
                     style={{
@@ -597,6 +697,8 @@ export default function AdminPage() {
                           "inline-block",
                         textDecoration:
                           "none",
+                        padding:
+                          "10px 15px",
                       }}
                     >
                       View Ticket
@@ -620,10 +722,33 @@ export default function AdminPage() {
         )}
       </section>
 
+      {/* SCHEDULE */}
+
       <section className="admin-card">
-        <h2>
-          Schedule Selected Movie
-        </h2>
+        <div
+          style={{
+            marginBottom: 26,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              letterSpacing: 2.2,
+              opacity: 0.45,
+              marginBottom: 6,
+            }}
+          >
+            PROGRAMMING
+          </div>
+
+          <h2
+            style={{
+              margin: 0,
+            }}
+          >
+            Schedule Selected Movie
+          </h2>
+        </div>
 
         {waitingScreenings.length ===
         0 ? (
@@ -648,20 +773,21 @@ export default function AdminPage() {
                     screening.id
                   }
                   style={{
-                    marginBottom: 28,
-                    paddingBottom: 28,
-                    borderBottom:
-                      "1px solid rgba(255,255,255,0.12)",
+                    marginBottom: 20,
                   }}
                 >
+                  {/* MOVIE HERO */}
+
                   <div
                     style={{
                       display:
-                        "flex",
-                      gap: 16,
+                        "grid",
+                      gridTemplateColumns:
+                        "110px 1fr",
+                      gap: 22,
                       alignItems:
-                        "flex-start",
-                      marginBottom: 20,
+                        "center",
+                      marginBottom: 30,
                     }}
                   >
                     <img
@@ -672,20 +798,33 @@ export default function AdminPage() {
                         screening.movie_title
                       }
                       style={{
-                        width: 82,
-                        height: 123,
+                        width: 110,
+                        aspectRatio:
+                          "2 / 3",
                         objectFit:
                           "cover",
-                        borderRadius: 8,
+                        borderRadius: 12,
                       }}
                     />
 
                     <div>
                       <div
-                        className="row-title"
                         style={{
-                          fontSize: 20,
-                          marginBottom: 6,
+                          fontSize: 11,
+                          letterSpacing: 2,
+                          opacity: 0.45,
+                          marginBottom: 8,
+                        }}
+                      >
+                        SELECTED MOVIE
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 25,
+                          fontWeight: 650,
+                          lineHeight: 1.15,
+                          marginBottom: 10,
                         }}
                       >
                         {
@@ -693,164 +832,303 @@ export default function AdminPage() {
                         }
                       </div>
 
-                      <div className="row-status">
-                        Add several possible showtimes.
+                      <div
+                        style={{
+                          fontSize: 13,
+                          opacity: 0.55,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        Offer a few possible
+                        screening times for the
+                        guest to choose from.
                       </div>
                     </div>
                   </div>
 
-                  <label className="label">
-                    Date
-                  </label>
+                  {/* DATE + TIME */}
 
-                  <input
-                    className="text-input"
-                    type="date"
-                    value={
-                      dateValues[
-                        screening.id
-                      ] || ""
-                    }
-                    onChange={(e) =>
-                      setDateValues({
-                        ...dateValues,
-                        [screening.id]:
-                          e.target
-                            .value,
-                      })
-                    }
-                  />
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(150px, 1fr))",
+                      gap: 14,
+                      marginBottom: 18,
+                    }}
+                  >
+                    <div>
+                      <label
+                        className="label"
+                        style={{
+                          display:
+                            "block",
+                          marginBottom: 8,
+                        }}
+                      >
+                        Date
+                      </label>
 
-                  <label className="label">
-                    Time
-                  </label>
+                      <input
+                        className="text-input"
+                        type="date"
+                        value={
+                          dateValues[
+                            screening.id
+                          ] || ""
+                        }
+                        onChange={(e) =>
+                          setDateValues({
+                            ...dateValues,
+                            [screening.id]:
+                              e.target
+                                .value,
+                          })
+                        }
+                        style={{
+                          width: "100%",
+                          boxSizing:
+                            "border-box",
+                        }}
+                      />
+                    </div>
 
-                  <input
-                    className="text-input"
-                    type="time"
-                    value={
-                      timeValues[
-                        screening.id
-                      ] || ""
-                    }
-                    onChange={(e) =>
-                      setTimeValues({
-                        ...timeValues,
-                        [screening.id]:
-                          e.target
-                            .value,
-                      })
-                    }
-                  />
+                    <div>
+                      <label
+                        className="label"
+                        style={{
+                          display:
+                            "block",
+                          marginBottom: 8,
+                        }}
+                      >
+                        Time
+                      </label>
 
-                  <div className="actions">
-                    <button
-                      className="primary"
-                      onClick={() =>
-                        addShowtime(
-                          screening
-                        )
-                      }
-                      disabled={
-                        savingShowtime ===
-                        screening.id
-                      }
-                    >
-                      {savingShowtime ===
-                      screening.id
-                        ? "Adding…"
-                        : "Add Showtime"}
-                    </button>
+                      <input
+                        className="text-input"
+                        type="time"
+                        value={
+                          timeValues[
+                            screening.id
+                          ] || ""
+                        }
+                        onChange={(e) =>
+                          setTimeValues({
+                            ...timeValues,
+                            [screening.id]:
+                              e.target
+                                .value,
+                          })
+                        }
+                        style={{
+                          width: "100%",
+                          boxSizing:
+                            "border-box",
+                        }}
+                      />
+                    </div>
                   </div>
+
+                  {/* WATCH LINK */}
+
+                  <div
+                    style={{
+                      marginBottom: 20,
+                    }}
+                  >
+                    <label
+                      className="label"
+                      style={{
+                        display:
+                          "block",
+                        marginBottom: 8,
+                      }}
+                    >
+                      Watch Link
+                    </label>
+
+                    <input
+                      className="text-input"
+                      type="url"
+                      value={
+                        watchValues[
+                          screening.id
+                        ] || ""
+                      }
+                      onChange={(e) =>
+                        setWatchValues({
+                          ...watchValues,
+                          [screening.id]:
+                            e.target
+                              .value,
+                        })
+                      }
+                      placeholder="Baidu, Google Drive, YouTube, Vimeo..."
+                      style={{
+                        width: "100%",
+                        boxSizing:
+                          "border-box",
+                      }}
+                    />
+
+                    <div
+                      style={{
+                        fontSize: 11,
+                        opacity: 0.45,
+                        marginTop: 7,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Optional · This will appear
+                      on the final movie ticket.
+                    </div>
+                  </div>
+
+                  {/* ADD BUTTON */}
+
+                  <button
+                    className="primary"
+                    onClick={() =>
+                      addShowtime(
+                        screening
+                      )
+                    }
+                    disabled={
+                      savingShowtime ===
+                      screening.id
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "15px 20px",
+                      fontSize: 15,
+                      fontWeight: 650,
+                      marginBottom: 28,
+                    }}
+                  >
+                    {savingShowtime ===
+                    screening.id
+                      ? "Adding…"
+                      : "+ Add Showtime"}
+                  </button>
+
+                  {/* SHOWTIME CARDS */}
 
                   {currentShowtimes.length >
                     0 && (
-                    <div
-                      style={{
-                        marginTop: 24,
-                      }}
-                    >
+                    <div>
                       <div
-                        className="label"
                         style={{
-                          marginBottom: 10,
+                          fontSize: 11,
+                          letterSpacing: 2,
+                          opacity: 0.45,
+                          marginBottom: 12,
                         }}
                       >
-                        Available for Guest
+                        SHOWTIMES OFFERED
                       </div>
 
-                      {currentShowtimes.map(
-                        (
-                          showtime
-                        ) => (
-                          <div
-                            key={
-                              showtime.id
-                            }
-                            style={{
-                              display:
-                                "flex",
-                              justifyContent:
-                                "space-between",
-                              alignItems:
-                                "center",
-                              gap: 12,
-                              padding:
-                                "12px 0",
-                              borderTop:
-                                "1px solid rgba(255,255,255,0.08)",
-                            }}
-                          >
-                            <div>
-                              <strong>
-                                {
-                                  showtime.screening_date
-                                }
-                              </strong>
+                      <div
+                        style={{
+                          display: "grid",
+                          gap: 10,
+                        }}
+                      >
+                        {currentShowtimes.map(
+                          (
+                            showtime
+                          ) => (
+                            <div
+                              key={
+                                showtime.id
+                              }
+                              style={{
+                                display:
+                                  "flex",
+                                justifyContent:
+                                  "space-between",
+                                alignItems:
+                                  "center",
+                                gap: 14,
+                                padding:
+                                  "15px 16px",
+                                border:
+                                  "1px solid rgba(255,255,255,0.09)",
+                                borderRadius: 10,
+                                background:
+                                  "rgba(255,255,255,0.025)",
+                              }}
+                            >
+                              <div>
+                                <div
+                                  style={{
+                                    fontSize: 15,
+                                    fontWeight: 600,
+                                    marginBottom: 3,
+                                  }}
+                                >
+                                  {
+                                    showtime.screening_date
+                                  }
+                                </div>
 
-                              {" · "}
+                                <div
+                                  style={{
+                                    fontSize: 13,
+                                    opacity: 0.55,
+                                  }}
+                                >
+                                  {showtime.screening_time.slice(
+                                    0,
+                                    5
+                                  )}
+                                </div>
+                              </div>
 
-                              {showtime.screening_time.slice(
-                                0,
-                                5
+                              {showtime.status ===
+                                "available" && (
+                                <button
+                                  className="danger"
+                                  onClick={() =>
+                                    deleteShowtime(
+                                      showtime
+                                    )
+                                  }
+                                  style={{
+                                    padding:
+                                      "8px 12px",
+                                  }}
+                                >
+                                  Delete
+                                </button>
                               )}
                             </div>
-
-                            {showtime.status ===
-                              "available" && (
-                              <button
-                                className="danger"
-                                onClick={() =>
-                                  deleteShowtime(
-                                    showtime
-                                  )
-                                }
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                        )
-                      )}
+                          )
+                        )}
+                      </div>
                     </div>
                   )}
 
                   <div
                     style={{
-                      marginTop: 22,
+                      marginTop: 24,
                     }}
                   >
                     <Link
                       href="/"
-                      className="primary"
+                      className="secondary"
                       style={{
                         display:
-                          "inline-block",
+                          "block",
                         textDecoration:
                           "none",
+                        textAlign:
+                          "center",
+                        padding:
+                          "12px 18px",
                       }}
                     >
-                      Go to Guest View
+                      Preview Guest View →
                     </Link>
                   </div>
                 </div>
@@ -860,7 +1138,20 @@ export default function AdminPage() {
         )}
       </section>
 
+      {/* ADD MOVIE */}
+
       <section className="admin-card">
+        <div
+          style={{
+            fontSize: 11,
+            letterSpacing: 2.2,
+            opacity: 0.45,
+            marginBottom: 6,
+          }}
+        >
+          LIBRARY
+        </div>
+
         <h2>Add Movie</h2>
 
         <form
@@ -923,9 +1214,22 @@ export default function AdminPage() {
         </form>
       </section>
 
+      {/* MOVIE POOL */}
+
       <section className="admin-card">
+        <div
+          style={{
+            fontSize: 11,
+            letterSpacing: 2.2,
+            opacity: 0.45,
+            marginBottom: 6,
+          }}
+        >
+          CURRENT POOL
+        </div>
+
         <h2>
-          Movie Pool (
+          Movies (
           {
             movies.filter(
               (movie) =>
