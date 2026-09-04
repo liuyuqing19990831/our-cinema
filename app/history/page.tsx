@@ -17,6 +17,8 @@ type Screening = {
   screening_time: string | null;
   niu_rating: number | null;
   xia_rating: number | null;
+  niu_rated_at: string | null;
+  xia_rated_at: string | null;
 };
 
 export default function HistoryPage() {
@@ -25,6 +27,9 @@ export default function HistoryPage() {
 
   const [loading, setLoading] =
     useState(true);
+
+  const [saving, setSaving] =
+    useState<string | null>(null);
 
   async function loadHistory() {
     setLoading(true);
@@ -57,8 +62,7 @@ export default function HistoryPage() {
       return;
     }
 
-    const now =
-      new Date();
+    const now = new Date();
 
     const past =
       (
@@ -78,8 +82,7 @@ export default function HistoryPage() {
             );
 
           return (
-            screeningDate <
-            now
+            screeningDate < now
           );
         }
       );
@@ -111,18 +114,178 @@ export default function HistoryPage() {
     };
   }, []);
 
-  function stars(
-    rating: number | null
+  async function setRating(
+    screening: Screening,
+    person: "niu" | "xia",
+    rating: number
   ) {
-    if (!rating) {
-      return "Not rated yet";
+    const key =
+      `${screening.id}-${person}`;
+
+    setSaving(key);
+
+    const currentRating =
+      person === "niu"
+        ? screening.niu_rating
+        : screening.xia_rating;
+
+    const nextRating =
+      currentRating === rating
+        ? null
+        : rating;
+
+    const update =
+      person === "niu"
+        ? {
+            niu_rating:
+              nextRating,
+            niu_rated_at:
+              nextRating
+                ? new Date().toISOString()
+                : null,
+          }
+        : {
+            xia_rating:
+              nextRating,
+            xia_rated_at:
+              nextRating
+                ? new Date().toISOString()
+                : null,
+          };
+
+    const { error } =
+      await supabase
+        .from("screenings")
+        .update(update)
+        .eq(
+          "id",
+          screening.id
+        );
+
+    setSaving(null);
+
+    if (error) {
+      alert(error.message);
+      return;
     }
 
-    return `${"★".repeat(
-      rating
-    )}${"☆".repeat(
-      5 - rating
-    )}  ${rating}/5`;
+    await loadHistory();
+  }
+
+  function RatingRow({
+    screening,
+    person,
+    label,
+    rating,
+  }: {
+    screening: Screening;
+    person: "niu" | "xia";
+    label: string;
+    rating: number | null;
+  }) {
+    const key =
+      `${screening.id}-${person}`;
+
+    return (
+      <div
+        style={{
+          padding: "16px 0",
+          borderTop:
+            "1px solid rgba(255,255,255,0.08)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent:
+              "space-between",
+            alignItems: "center",
+            gap: 12,
+            marginBottom: 10,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 650,
+            }}
+          >
+            {label}
+          </div>
+
+          <div
+            style={{
+              fontSize: 12,
+              opacity: 0.45,
+            }}
+          >
+            {rating
+              ? `${rating}/5`
+              : "Not rated"}
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 7,
+            flexWrap: "wrap",
+          }}
+        >
+          {[1, 2, 3, 4, 5].map(
+            (star) => (
+              <button
+                key={star}
+                disabled={
+                  saving === key
+                }
+                onClick={() =>
+                  setRating(
+                    screening,
+                    person,
+                    star
+                  )
+                }
+                aria-label={`${label} ${star} stars`}
+                style={{
+                  border: "none",
+                  background:
+                    "transparent",
+                  padding: 0,
+                  cursor: "pointer",
+                  fontSize: 29,
+                  lineHeight: 1,
+                  color:
+                    rating &&
+                    star <= rating
+                      ? "inherit"
+                      : "rgba(255,255,255,0.22)",
+                  opacity:
+                    saving === key
+                      ? 0.5
+                      : 1,
+                }}
+              >
+                ★
+              </button>
+            )
+          )}
+        </div>
+
+        {rating && (
+          <div
+            style={{
+              fontSize: 11,
+              opacity: 0.4,
+              marginTop: 8,
+            }}
+          >
+            Tap the same star again
+            to remove the rating.
+          </div>
+        )}
+      </div>
+    );
   }
 
   if (loading) {
@@ -137,12 +300,18 @@ export default function HistoryPage() {
 
   return (
     <main className="shell">
-      <header className="header">
+      <header
+        className="header"
+        style={{
+          alignItems: "center",
+          gap: 16,
+        }}
+      >
         <div>
           <h1
             className="brand"
             style={{
-              fontSize: 34,
+              fontSize: 36,
             }}
           >
             WATCH HISTORY
@@ -161,6 +330,8 @@ export default function HistoryPage() {
               "none",
             padding:
               "11px 18px",
+            whiteSpace:
+              "nowrap",
           }}
         >
           ← Movies
@@ -174,32 +345,36 @@ export default function HistoryPage() {
             textAlign:
               "center",
             padding:
-              "52px 24px",
+              "56px 24px",
           }}
         >
           <div
             style={{
-              fontSize: 42,
+              fontSize: 46,
               marginBottom: 16,
             }}
           >
             🎬
           </div>
 
-          <h2>
+          <h2
+            style={{
+              fontSize: 27,
+            }}
+          >
             No Watch History Yet
           </h2>
 
           <div className="status">
             Finished screenings
-            will appear here.
+            will appear here automatically.
           </div>
         </section>
       ) : (
         <div
           style={{
             display: "grid",
-            gap: 20,
+            gap: 24,
           }}
         >
           {history.map(
@@ -210,7 +385,8 @@ export default function HistoryPage() {
                 }
                 className="admin-card"
                 style={{
-                  padding: 22,
+                  padding:
+                    "26px 24px",
                 }}
               >
                 <div
@@ -218,8 +394,8 @@ export default function HistoryPage() {
                     display:
                       "grid",
                     gridTemplateColumns:
-                      "110px 1fr",
-                    gap: 22,
+                      "130px 1fr",
+                    gap: 24,
                     alignItems:
                       "start",
                   }}
@@ -232,21 +408,33 @@ export default function HistoryPage() {
                       screening.movie_title
                     }
                     style={{
-                      width: 110,
+                      width: 130,
                       aspectRatio:
                         "2 / 3",
                       objectFit:
                         "cover",
-                      borderRadius: 12,
+                      borderRadius: 13,
                     }}
                   />
 
                   <div>
                     <div
                       style={{
-                        fontSize: 24,
+                        fontSize: 11,
+                        letterSpacing: 2,
+                        opacity: 0.4,
+                        marginBottom: 7,
+                      }}
+                    >
+                      WATCHED
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: 25,
                         fontWeight: 650,
-                        marginBottom: 8,
+                        lineHeight: 1.15,
+                        marginBottom: 9,
                       }}
                     >
                       {
@@ -257,8 +445,8 @@ export default function HistoryPage() {
                     <div
                       style={{
                         fontSize: 14,
-                        opacity: 0.6,
-                        marginBottom: 20,
+                        opacity: 0.58,
+                        marginBottom: 18,
                       }}
                     >
                       {
@@ -271,65 +459,27 @@ export default function HistoryPage() {
                       )}
                     </div>
 
-                    <div
-                      style={{
-                        padding:
-                          "13px 0",
-                        borderTop:
-                          "1px solid rgba(255,255,255,0.08)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 11,
-                          letterSpacing: 1.5,
-                          opacity: 0.45,
-                          marginBottom: 5,
-                        }}
-                      >
-                        牛
-                      </div>
+                    <RatingRow
+                      screening={
+                        screening
+                      }
+                      person="niu"
+                      label="牛"
+                      rating={
+                        screening.niu_rating
+                      }
+                    />
 
-                      <div
-                        style={{
-                          fontSize: 15,
-                        }}
-                      >
-                        {stars(
-                          screening.niu_rating
-                        )}
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        padding:
-                          "13px 0",
-                        borderTop:
-                          "1px solid rgba(255,255,255,0.08)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 11,
-                          letterSpacing: 1.5,
-                          opacity: 0.45,
-                          marginBottom: 5,
-                        }}
-                      >
-                        虾
-                      </div>
-
-                      <div
-                        style={{
-                          fontSize: 15,
-                        }}
-                      >
-                        {stars(
-                          screening.xia_rating
-                        )}
-                      </div>
-                    </div>
+                    <RatingRow
+                      screening={
+                        screening
+                      }
+                      person="xia"
+                      label="虾"
+                      rating={
+                        screening.xia_rating
+                      }
+                    />
                   </div>
                 </div>
               </section>
