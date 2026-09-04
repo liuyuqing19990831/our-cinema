@@ -17,9 +17,20 @@ type Festival = {
   status: string;
 };
 
+type FestivalMovie = {
+  id: number;
+  created_at: string;
+  festival_id: number;
+  title: string;
+  poster_url: string;
+};
+
 export default function FestivalAdminPage() {
   const [festivals, setFestivals] =
     useState<Festival[]>([]);
+
+  const [festivalMovies, setFestivalMovies] =
+    useState<FestivalMovie[]>([]);
 
   const [title, setTitle] =
     useState("");
@@ -36,16 +47,22 @@ export default function FestivalAdminPage() {
   const [creating, setCreating] =
     useState(false);
 
-  const [
-    workingId,
-    setWorkingId,
-  ] = useState<number | null>(
-    null
-  );
+  const [workingId, setWorkingId] =
+    useState<number | null>(null);
+
+  const [movieTitles, setMovieTitles] =
+    useState<Record<number, string>>({});
+
+  const [movieFiles, setMovieFiles] =
+    useState<Record<number, File | null>>({});
+
+  const [moviePreviews, setMoviePreviews] =
+    useState<Record<number, string>>({});
+
+  const [uploadingFestivalId, setUploadingFestivalId] =
+    useState<number | null>(null);
 
   async function loadFestivals() {
-    setLoading(true);
-
     const { data, error } =
       await supabase
         .from("festivals")
@@ -57,39 +74,83 @@ export default function FestivalAdminPage() {
     if (error) {
       console.error(error);
       setFestivals([]);
-      setLoading(false);
       return;
     }
 
     setFestivals(
       (data ?? []) as Festival[]
     );
+  }
+
+  async function loadFestivalMovies() {
+    const { data, error } =
+      await supabase
+        .from("festival_movies")
+        .select("*")
+        .order("created_at", {
+          ascending: true,
+        });
+
+    if (error) {
+      console.error(error);
+      setFestivalMovies([]);
+      return;
+    }
+
+    setFestivalMovies(
+      (data ?? []) as FestivalMovie[]
+    );
+  }
+
+  async function loadAll() {
+    setLoading(true);
+
+    await Promise.all([
+      loadFestivals(),
+      loadFestivalMovies(),
+    ]);
 
     setLoading(false);
   }
 
   useEffect(() => {
-    loadFestivals();
+    loadAll();
 
-    const channel = supabase
-      .channel(
-        "festival-admin-live"
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "festivals",
-        },
-        () =>
-          loadFestivals()
-      )
-      .subscribe();
+    const festivalChannel =
+      supabase
+        .channel("festival-admin-live")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "festivals",
+          },
+          () => loadFestivals()
+        )
+        .subscribe();
+
+    const movieChannel =
+      supabase
+        .channel("festival-movies-admin-live")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "festival_movies",
+          },
+          () => loadFestivalMovies()
+        )
+        .subscribe();
 
     return () => {
       supabase.removeChannel(
-        channel
+        festivalChannel
+      );
+
+      supabase.removeChannel(
+        movieChannel
       );
     };
   }, []);
@@ -127,12 +188,9 @@ export default function FestivalAdminPage() {
         .from("festivals")
         .insert({
           title: title.trim(),
-          start_date:
-            startDate,
-          end_date:
-            endDate,
-          status:
-            "inactive",
+          start_date: startDate,
+          end_date: endDate,
+          status: "inactive",
         });
 
     setCreating(false);
@@ -156,36 +214,23 @@ export default function FestivalAdminPage() {
       festival.id
     );
 
-    /*
-      First turn all festivals off.
-      This means only one festival
-      can be active at a time.
-    */
     const {
-      error:
-        deactivateError,
+      error: deactivateError,
     } = await supabase
       .from("festivals")
       .update({
-        status:
-          "inactive",
+        status: "inactive",
       })
       .neq("id", -1);
 
-    if (
-      deactivateError
-    ) {
+    if (deactivateError) {
       setWorkingId(null);
-
       alert(
         deactivateError.message
       );
       return;
     }
 
-    /*
-      Activate selected festival.
-    */
     const { error } =
       await supabase
         .from("festivals")
@@ -218,8 +263,7 @@ export default function FestivalAdminPage() {
       await supabase
         .from("festivals")
         .update({
-          status:
-            "inactive",
+          status: "inactive",
         })
         .eq(
           "id",
@@ -241,39 +285,27 @@ export default function FestivalAdminPage() {
   ) {
     const ok =
       window.confirm(
-        `Delete "${festival.title}"?`
+        `Delete "${festival.title}" and all its films?`
       );
 
-    if (!ok) {
-      return;
-    }
+    if (!ok) return;
 
     setWorkingId(
       festival.id
     );
 
-    /*
-      Delete festival movies first,
-      so we do not leave orphaned films.
-    */
     const {
-      error:
-        movieDeleteError,
+      error: movieDeleteError,
     } = await supabase
-      .from(
-        "festival_movies"
-      )
+      .from("festival_movies")
       .delete()
       .eq(
         "festival_id",
         festival.id
       );
 
-    if (
-      movieDeleteError
-    ) {
+    if (movieDeleteError) {
       setWorkingId(null);
-
       alert(
         movieDeleteError.message
       );
@@ -296,7 +328,182 @@ export default function FestivalAdminPage() {
       return;
     }
 
-    await loadFestivals();
+    await loadAll();
+  }
+
+  function pickMovieFile(
+    festivalId: number,
+    file: File | null
+  ) {
+    const oldPreview =
+      moviePreviews[
+        festivalId
+      ];
+
+    if (oldPreview) {
+      URL.revokeObjectURL(
+        oldPreview
+      );
+    }
+
+    setMovieFiles({
+      ...movieFiles,
+      [festivalId]: file,
+    });
+
+    setMoviePreviews({
+      ...moviePreviews,
+      [festivalId]:
+        file
+          ? URL.createObjectURL(
+              file
+            )
+          : "",
+    });
+  }
+
+  async function addFestivalMovie(
+    festival: Festival
+  ) {
+    const movieTitle =
+      movieTitles[
+        festival.id
+      ]?.trim();
+
+    const file =
+      movieFiles[
+        festival.id
+      ];
+
+    if (
+      !movieTitle ||
+      !file
+    ) {
+      alert(
+        "Please add both a movie title and poster."
+      );
+      return;
+    }
+
+    setUploadingFestivalId(
+      festival.id
+    );
+
+    const ext =
+      file.name
+        .split(".")
+        .pop() || "jpg";
+
+    const path =
+      `festival-${festival.id}-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}.${ext}`;
+
+    const upload =
+      await supabase.storage
+        .from("posters")
+        .upload(
+          path,
+          file,
+          {
+            upsert: false,
+            contentType:
+              file.type ||
+              "image/jpeg",
+          }
+        );
+
+    if (upload.error) {
+      setUploadingFestivalId(
+        null
+      );
+
+      alert(
+        upload.error.message
+      );
+      return;
+    }
+
+    const { data: urlData } =
+      supabase.storage
+        .from("posters")
+        .getPublicUrl(path);
+
+    const { error } =
+      await supabase
+        .from("festival_movies")
+        .insert({
+          festival_id:
+            festival.id,
+          title:
+            movieTitle,
+          poster_url:
+            urlData.publicUrl,
+        });
+
+    setUploadingFestivalId(
+      null
+    );
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setMovieTitles({
+      ...movieTitles,
+      [festival.id]: "",
+    });
+
+    const preview =
+      moviePreviews[
+        festival.id
+      ];
+
+    if (preview) {
+      URL.revokeObjectURL(
+        preview
+      );
+    }
+
+    setMovieFiles({
+      ...movieFiles,
+      [festival.id]: null,
+    });
+
+    setMoviePreviews({
+      ...moviePreviews,
+      [festival.id]: "",
+    });
+
+    await loadFestivalMovies();
+  }
+
+  async function deleteFestivalMovie(
+    movie: FestivalMovie
+  ) {
+    const ok =
+      window.confirm(
+        `Delete "${movie.title}" from this festival?`
+      );
+
+    if (!ok) return;
+
+    const { error } =
+      await supabase
+        .from("festival_movies")
+        .delete()
+        .eq(
+          "id",
+          movie.id
+        );
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await loadFestivalMovies();
   }
 
   function formatDate(
@@ -378,8 +585,6 @@ export default function FestivalAdminPage() {
                 "none",
               padding:
                 "10px 16px",
-              whiteSpace:
-                "nowrap",
             }}
           >
             Guest View
@@ -393,8 +598,6 @@ export default function FestivalAdminPage() {
                 "none",
               padding:
                 "10px 16px",
-              whiteSpace:
-                "nowrap",
             }}
           >
             ← Admin
@@ -430,30 +633,24 @@ export default function FestivalAdminPage() {
             createFestival
           }
         >
-          <label
-            className="label"
-            style={{
-              display: "block",
-              marginBottom: 8,
-            }}
-          >
+          <label className="label">
             Festival Theme
           </label>
 
           <input
             className="text-input"
-            type="text"
             value={title}
             onChange={(e) =>
               setTitle(
                 e.target.value
               )
             }
-            placeholder="e.g. Wong Kar-wai Night"
+            placeholder="e.g. 我是真的讨厌异地恋"
             style={{
               width: "100%",
               boxSizing:
                 "border-box",
+              marginTop: 8,
               marginBottom: 18,
             }}
           />
@@ -468,65 +665,47 @@ export default function FestivalAdminPage() {
             }}
           >
             <div>
-              <label
-                className="label"
-                style={{
-                  display:
-                    "block",
-                  marginBottom: 8,
-                }}
-              >
+              <label className="label">
                 Start Date
               </label>
 
               <input
                 className="text-input"
                 type="date"
-                value={
-                  startDate
-                }
+                value={startDate}
                 onChange={(e) =>
                   setStartDate(
-                    e.target
-                      .value
+                    e.target.value
                   )
                 }
                 style={{
                   width: "100%",
                   boxSizing:
                     "border-box",
+                  marginTop: 8,
                 }}
               />
             </div>
 
             <div>
-              <label
-                className="label"
-                style={{
-                  display:
-                    "block",
-                  marginBottom: 8,
-                }}
-              >
+              <label className="label">
                 End Date
               </label>
 
               <input
                 className="text-input"
                 type="date"
-                value={
-                  endDate
-                }
+                value={endDate}
                 onChange={(e) =>
                   setEndDate(
-                    e.target
-                      .value
+                    e.target.value
                   )
                 }
                 style={{
                   width: "100%",
                   boxSizing:
                     "border-box",
+                  marginTop: 8,
                 }}
               />
             </div>
@@ -542,7 +721,6 @@ export default function FestivalAdminPage() {
               width: "100%",
               padding:
                 "14px 18px",
-              fontSize: 15,
             }}
           >
             {creating
@@ -566,18 +744,13 @@ export default function FestivalAdminPage() {
           FESTIVAL ARCHIVE
         </div>
 
-        <h2
-          style={{
-            marginTop: 0,
-            marginBottom: 24,
-          }}
-        >
+        <h2>
           Special Festivals
         </h2>
 
         {loading ? (
           <div className="status">
-            Loading festivals…
+            Loading…
           </div>
         ) : festivals.length ===
           0 ? (
@@ -588,7 +761,8 @@ export default function FestivalAdminPage() {
           <div
             style={{
               display: "grid",
-              gap: 16,
+              gap: 24,
+              marginTop: 22,
             }}
           >
             {festivals.map(
@@ -597,135 +771,100 @@ export default function FestivalAdminPage() {
                   festival.status ===
                   "active";
 
+                const movies =
+                  festivalMovies.filter(
+                    (movie) =>
+                      movie.festival_id ===
+                      festival.id
+                  );
+
                 return (
                   <div
                     key={
                       festival.id
                     }
                     style={{
-                      padding: 20,
+                      padding: 22,
                       border:
                         active
-                          ? "1px solid rgba(255,255,255,0.28)"
+                          ? "1px solid rgba(255,255,255,0.25)"
                           : "1px solid rgba(255,255,255,0.09)",
                       borderRadius: 14,
-                      background:
-                        active
-                          ? "rgba(255,255,255,0.055)"
-                          : "rgba(255,255,255,0.02)",
                     }}
                   >
                     <div
                       style={{
-                        display:
-                          "flex",
-                        justifyContent:
-                          "space-between",
-                        alignItems:
-                          "flex-start",
-                        gap: 14,
-                        marginBottom: 18,
+                        fontSize: 11,
+                        letterSpacing: 2,
+                        opacity: 0.45,
+                        marginBottom: 8,
                       }}
                     >
-                      <div>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            letterSpacing: 1.8,
-                            opacity:
-                              0.45,
-                            marginBottom: 7,
-                          }}
-                        >
-                          {active
-                            ? "● ACTIVE FESTIVAL"
-                            : "INACTIVE"}
-                        </div>
-
-                        <div
-                          style={{
-                            fontSize: 23,
-                            fontWeight: 650,
-                            lineHeight: 1.15,
-                            marginBottom: 9,
-                          }}
-                        >
-                          {
-                            festival.title
-                          }
-                        </div>
-
-                        <div
-                          style={{
-                            fontSize: 13,
-                            opacity:
-                              0.58,
-                          }}
-                        >
-                          {formatDate(
-                            festival.start_date
-                          )}
-                          {" — "}
-                          {formatDate(
-                            festival.end_date
-                          )}
-                        </div>
-                      </div>
+                      {active
+                        ? "● ACTIVE FESTIVAL"
+                        : "INACTIVE"}
                     </div>
 
                     <div
                       style={{
-                        display:
-                          "flex",
+                        fontSize: 25,
+                        fontWeight: 650,
+                        marginBottom: 8,
+                      }}
+                    >
+                      {festival.title}
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: 13,
+                        opacity: 0.55,
+                        marginBottom: 18,
+                      }}
+                    >
+                      {formatDate(
+                        festival.start_date
+                      )}
+                      {" — "}
+                      {formatDate(
+                        festival.end_date
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
                         gap: 10,
-                        flexWrap:
-                          "wrap",
+                        flexWrap: "wrap",
+                        marginBottom: 26,
                       }}
                     >
                       {active ? (
                         <button
                           className="secondary"
-                          disabled={
-                            workingId ===
-                            festival.id
-                          }
                           onClick={() =>
                             deactivateFestival(
                               festival
                             )
                           }
                         >
-                          {workingId ===
-                          festival.id
-                            ? "Saving…"
-                            : "Deactivate"}
+                          Deactivate
                         </button>
                       ) : (
                         <button
                           className="primary"
-                          disabled={
-                            workingId ===
-                            festival.id
-                          }
                           onClick={() =>
                             activateFestival(
                               festival
                             )
                           }
                         >
-                          {workingId ===
-                          festival.id
-                            ? "Saving…"
-                            : "Activate"}
+                          Activate
                         </button>
                       )}
 
                       <button
                         className="danger"
-                        disabled={
-                          workingId ===
-                          festival.id
-                        }
                         onClick={() =>
                           deleteFestival(
                             festival
@@ -735,35 +874,210 @@ export default function FestivalAdminPage() {
                         Delete Festival
                       </button>
                     </div>
+
+                    {/* ADD FILM */}
+
+                    <div
+                      style={{
+                        paddingTop: 22,
+                        borderTop:
+                          "1px solid rgba(255,255,255,0.08)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 11,
+                          letterSpacing: 2,
+                          opacity: 0.45,
+                          marginBottom: 12,
+                        }}
+                      >
+                        ADD FILM
+                      </div>
+
+                      <input
+                        className="text-input"
+                        value={
+                          movieTitles[
+                            festival.id
+                          ] ?? ""
+                        }
+                        onChange={(e) =>
+                          setMovieTitles({
+                            ...movieTitles,
+                            [festival.id]:
+                              e.target.value,
+                          })
+                        }
+                        placeholder="Movie title"
+                        style={{
+                          width: "100%",
+                          boxSizing:
+                            "border-box",
+                          marginBottom: 12,
+                        }}
+                      />
+
+                      <input
+                        className="file-input"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) =>
+                          pickMovieFile(
+                            festival.id,
+                            e.target.files?.[0] ??
+                              null
+                          )
+                        }
+                        style={{
+                          marginBottom: 14,
+                        }}
+                      />
+
+                      {moviePreviews[
+                        festival.id
+                      ] && (
+                        <img
+                          src={
+                            moviePreviews[
+                              festival.id
+                            ]
+                          }
+                          alt="Preview"
+                          style={{
+                            width: 100,
+                            aspectRatio:
+                              "2 / 3",
+                            objectFit:
+                              "cover",
+                            borderRadius: 10,
+                            marginBottom: 14,
+                          }}
+                        />
+                      )}
+
+                      <button
+                        className="primary"
+                        disabled={
+                          uploadingFestivalId ===
+                          festival.id
+                        }
+                        onClick={() =>
+                          addFestivalMovie(
+                            festival
+                          )
+                        }
+                        style={{
+                          width: "100%",
+                          padding:
+                            "12px 16px",
+                        }}
+                      >
+                        {uploadingFestivalId ===
+                        festival.id
+                          ? "Uploading…"
+                          : "+ Add Film"}
+                      </button>
+                    </div>
+
+                    {/* FILM LIST */}
+
+                    <div
+                      style={{
+                        marginTop: 26,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 11,
+                          letterSpacing: 2,
+                          opacity: 0.45,
+                          marginBottom: 14,
+                        }}
+                      >
+                        PROGRAM · {movies.length} FILMS
+                      </div>
+
+                      {movies.length ===
+                      0 ? (
+                        <div className="status">
+                          No films added yet.
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            display: "grid",
+                            gap: 12,
+                          }}
+                        >
+                          {movies.map(
+                            (movie) => (
+                              <div
+                                key={
+                                  movie.id
+                                }
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns:
+                                    "60px 1fr auto",
+                                  gap: 14,
+                                  alignItems:
+                                    "center",
+                                  padding:
+                                    "10px 0",
+                                  borderTop:
+                                    "1px solid rgba(255,255,255,0.06)",
+                                }}
+                              >
+                                <img
+                                  src={
+                                    movie.poster_url
+                                  }
+                                  alt={
+                                    movie.title
+                                  }
+                                  style={{
+                                    width: 60,
+                                    aspectRatio:
+                                      "2 / 3",
+                                    objectFit:
+                                      "cover",
+                                    borderRadius: 7,
+                                  }}
+                                />
+
+                                <div
+                                  style={{
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {
+                                    movie.title
+                                  }
+                                </div>
+
+                                <button
+                                  className="danger"
+                                  onClick={() =>
+                                    deleteFestivalMovie(
+                                      movie
+                                    )
+                                  }
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               }
             )}
           </div>
         )}
-      </section>
-
-      <section
-        className="admin-card"
-        style={{
-          textAlign: "center",
-        }}
-      >
-        <div
-          style={{
-            fontSize: 12,
-            opacity: 0.5,
-            lineHeight: 1.7,
-          }}
-        >
-          Only one special
-          festival can be active
-          at a time.
-          <br />
-          If no festival is active,
-          the guest page will show
-          “暂无特殊影展安排”.
-        </div>
       </section>
     </main>
   );
