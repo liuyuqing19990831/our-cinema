@@ -65,11 +65,6 @@ export default function TicketPage() {
   async function loadTickets() {
     setLoading(true);
 
-    /*
-      LOAD ALL FUTURE
-      SCHEDULED SCREENINGS
-    */
-
     const {
       data:
         screeningData,
@@ -123,10 +118,6 @@ export default function TicketPage() {
         []
       ) as Screening[];
 
-    /*
-      FIND FESTIVAL IDS
-    */
-
     const festivalIds = [
       ...new Set(
         screenings
@@ -142,10 +133,6 @@ export default function TicketPage() {
           )
       ),
     ];
-
-    /*
-      LOAD FESTIVAL TITLES
-    */
 
     let festivalMap:
       Record<
@@ -204,11 +191,6 @@ export default function TicketPage() {
           );
       }
     }
-
-    /*
-      ONLY KEEP
-      FUTURE TICKETS
-    */
 
     const now =
       new Date();
@@ -381,6 +363,191 @@ export default function TicketPage() {
     }
   }
 
+  function escapeICS(
+    text: string
+  ) {
+    return text
+      .replace(
+        /\\/g,
+        "\\\\"
+      )
+      .replace(
+        /\n/g,
+        "\\n"
+      )
+      .replace(
+        /,/g,
+        "\\,"
+      )
+      .replace(
+        /;/g,
+        "\\;"
+      );
+  }
+
+  function formatICSDate(
+    date: Date
+  ) {
+    const pad = (
+      value: number
+    ) =>
+      value
+        .toString()
+        .padStart(
+          2,
+          "0"
+        );
+
+    return (
+      date.getFullYear() +
+      pad(
+        date.getMonth() +
+          1
+      ) +
+      pad(
+        date.getDate()
+      ) +
+      "T" +
+      pad(
+        date.getHours()
+      ) +
+      pad(
+        date.getMinutes()
+      ) +
+      "00"
+    );
+  }
+
+  function addToCalendar(
+    ticket: Ticket
+  ) {
+    if (
+      !ticket.screening_date ||
+      !ticket.screening_time
+    ) {
+      return;
+    }
+
+    const start =
+      new Date(
+        `${ticket.screening_date}T${ticket.screening_time}`
+      );
+
+    const end =
+      new Date(
+        start.getTime() +
+          2 *
+            60 *
+            60 *
+            1000
+      );
+
+    const title =
+      ticket.festival_title
+        ? `${ticket.festival_title} · ${ticket.movie_title}`
+        : `Our Cinema · ${ticket.movie_title}`;
+
+    const descriptionParts = [
+      "Our Cinema",
+      "Admit Two",
+    ];
+
+    if (
+      ticket.watch_url
+    ) {
+      descriptionParts.push(
+        `Watch Movie: ${ticket.watch_url}`
+      );
+    }
+
+    if (
+      ticket.watch_code
+    ) {
+      descriptionParts.push(
+        `Access Code: ${ticket.watch_code}`
+      );
+    }
+
+    const description =
+      descriptionParts.join(
+        "\n\n"
+      );
+
+    const uid =
+      `our-cinema-${ticket.id}@our-cinema`;
+
+    const now =
+      new Date();
+
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Our Cinema//Movie Ticket//EN",
+      "CALSCALE:GREGORIAN",
+      "BEGIN:VEVENT",
+      `UID:${uid}`,
+      `DTSTAMP:${formatICSDate(
+        now
+      )}`,
+      `DTSTART:${formatICSDate(
+        start
+      )}`,
+      `DTEND:${formatICSDate(
+        end
+      )}`,
+      `SUMMARY:${escapeICS(
+        title
+      )}`,
+      `DESCRIPTION:${escapeICS(
+        description
+      )}`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+
+    const blob =
+      new Blob(
+        [ics],
+        {
+          type:
+            "text/calendar;charset=utf-8",
+        }
+      );
+
+    const url =
+      URL.createObjectURL(
+        blob
+      );
+
+    const link =
+      document.createElement(
+        "a"
+      );
+
+    link.href =
+      url;
+
+    link.download =
+      `${ticket.movie_title.replace(
+        /[^a-zA-Z0-9\u4e00-\u9fff]+/g,
+        "-"
+      )}.ics`;
+
+    document.body.appendChild(
+      link
+    );
+
+    link.click();
+
+    document.body.removeChild(
+      link
+    );
+
+    URL.revokeObjectURL(
+      url
+    );
+  }
+
   function BackButton({
     bottom = false,
   }: {
@@ -416,7 +583,8 @@ export default function TicketPage() {
 
           fontWeight: 600,
 
-          letterSpacing: 0.3,
+          letterSpacing:
+            0.3,
 
           whiteSpace:
             "nowrap",
@@ -446,6 +614,7 @@ export default function TicketPage() {
         style={{
           alignItems:
             "center",
+
           gap: 16,
         }}
       >
@@ -475,7 +644,8 @@ export default function TicketPage() {
   }
 
   if (
-    tickets.length === 0
+    tickets.length ===
+    0
   ) {
     return (
       <main className="shell">
@@ -493,8 +663,11 @@ export default function TicketPage() {
         >
           <div
             style={{
-              fontSize: 44,
-              marginBottom: 18,
+              fontSize:
+                44,
+
+              marginBottom:
+                18,
             }}
           >
             🎟
@@ -502,8 +675,11 @@ export default function TicketPage() {
 
           <h2
             style={{
-              fontSize: 26,
-              marginBottom: 12,
+              fontSize:
+                26,
+
+              marginBottom:
+                12,
             }}
           >
             No Ticket Yet
@@ -512,9 +688,11 @@ export default function TicketPage() {
           <div
             className="status"
             style={{
-              marginBottom: 30,
+              marginBottom:
+                30,
 
-              lineHeight: 1.6,
+              lineHeight:
+                1.6,
             }}
           >
             Your tickets will
@@ -534,8 +712,11 @@ export default function TicketPage() {
 
       <div
         style={{
-          display: "grid",
-          gap: 24,
+          display:
+            "grid",
+
+          gap:
+            24,
         }}
       >
         {tickets.map(
@@ -549,13 +730,10 @@ export default function TicketPage() {
                 textAlign:
                   "center",
 
-                padding: 30,
+                padding:
+                  30,
               }}
             >
-              {/*
-                FESTIVAL / NORMAL LABEL
-              */}
-
               <div
                 style={{
                   display:
@@ -564,7 +742,8 @@ export default function TicketPage() {
                   justifyContent:
                     "center",
 
-                  marginBottom: 14,
+                  marginBottom:
+                    14,
                 }}
               >
                 <div
@@ -586,7 +765,8 @@ export default function TicketPage() {
                     padding:
                       "6px 11px",
 
-                    fontSize: 9,
+                    fontSize:
+                      9,
 
                     letterSpacing:
                       1.8,
@@ -606,20 +786,20 @@ export default function TicketPage() {
                 </div>
               </div>
 
-              {/*
-                FESTIVAL TITLE
-              */}
-
               {ticket.festival_title && (
                 <div
                   style={{
-                    fontSize: 13,
+                    fontSize:
+                      13,
 
-                    opacity: 0.62,
+                    opacity:
+                      0.62,
 
-                    marginBottom: 18,
+                    marginBottom:
+                      18,
 
-                    lineHeight: 1.4,
+                    lineHeight:
+                      1.4,
                   }}
                 >
                   {
@@ -630,13 +810,17 @@ export default function TicketPage() {
 
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize:
+                    11,
 
-                  letterSpacing: 3,
+                  letterSpacing:
+                    3,
 
-                  opacity: 0.55,
+                  opacity:
+                    0.55,
 
-                  marginBottom: 22,
+                  marginBottom:
+                    22,
                 }}
               >
                 ADMIT TWO
@@ -653,19 +837,24 @@ export default function TicketPage() {
                   width:
                     "min(240px, 76%)",
 
-                  borderRadius: 12,
+                  borderRadius:
+                    12,
 
-                  marginBottom: 26,
+                  marginBottom:
+                    26,
                 }}
               />
 
               <h2
                 style={{
-                  fontSize: 30,
+                  fontSize:
+                    30,
 
-                  marginBottom: 22,
+                  marginBottom:
+                    22,
 
-                  lineHeight: 1.15,
+                  lineHeight:
+                    1.15,
                 }}
               >
                 {
@@ -675,11 +864,14 @@ export default function TicketPage() {
 
               <div
                 style={{
-                  fontSize: 17,
+                  fontSize:
+                    17,
 
-                  opacity: 0.75,
+                  opacity:
+                    0.75,
 
-                  marginBottom: 8,
+                  marginBottom:
+                    8,
                 }}
               >
                 {ticket.screening_date
@@ -691,11 +883,14 @@ export default function TicketPage() {
 
               <div
                 style={{
-                  fontSize: 38,
+                  fontSize:
+                    38,
 
-                  fontWeight: 700,
+                  fontWeight:
+                    700,
 
-                  letterSpacing: 2,
+                  letterSpacing:
+                    2,
                 }}
               >
                 {ticket.screening_time?.slice(
@@ -706,14 +901,46 @@ export default function TicketPage() {
 
               <div
                 style={{
-                  marginTop: 30,
+                  marginTop:
+                    30,
 
-                  paddingTop: 22,
+                  paddingTop:
+                    22,
 
                   borderTop:
                     "1px dashed rgba(255,255,255,0.25)",
                 }}
               >
+                <button
+                  className="secondary"
+                  onClick={() =>
+                    addToCalendar(
+                      ticket
+                    )
+                  }
+                  style={{
+                    display:
+                      "block",
+
+                    width:
+                      "100%",
+
+                    marginBottom:
+                      14,
+
+                    padding:
+                      "13px 18px",
+
+                    fontSize:
+                      14,
+
+                    fontWeight:
+                      650,
+                  }}
+                >
+                  ＋ Add to Calendar
+                </button>
+
                 {ticket.watch_url && (
                   <a
                     href={
@@ -738,9 +965,11 @@ export default function TicketPage() {
                       padding:
                         "15px 20px",
 
-                      fontSize: 16,
+                      fontSize:
+                        16,
 
-                      fontWeight: 650,
+                      fontWeight:
+                        650,
 
                       marginBottom:
                         ticket.watch_code
@@ -761,12 +990,14 @@ export default function TicketPage() {
                       border:
                         "1px solid rgba(255,255,255,0.10)",
 
-                      borderRadius: 12,
+                      borderRadius:
+                        12,
 
                       background:
                         "rgba(255,255,255,0.025)",
 
-                      marginBottom: 24,
+                      marginBottom:
+                        24,
 
                       textAlign:
                         "left",
@@ -774,13 +1005,17 @@ export default function TicketPage() {
                   >
                     <div
                       style={{
-                        fontSize: 10,
+                        fontSize:
+                          10,
 
-                        letterSpacing: 2,
+                        letterSpacing:
+                          2,
 
-                        opacity: 0.45,
+                        opacity:
+                          0.45,
 
-                        marginBottom: 9,
+                        marginBottom:
+                          9,
                       }}
                     >
                       ACCESS CODE
@@ -797,16 +1032,20 @@ export default function TicketPage() {
                         alignItems:
                           "center",
 
-                        gap: 12,
+                        gap:
+                          12,
                       }}
                     >
                       <div
                         style={{
-                          fontSize: 22,
+                          fontSize:
+                            22,
 
-                          fontWeight: 700,
+                          fontWeight:
+                            700,
 
-                          letterSpacing: 2,
+                          letterSpacing:
+                            2,
 
                           wordBreak:
                             "break-all",
@@ -825,12 +1064,14 @@ export default function TicketPage() {
                           )
                         }
                         style={{
-                          flexShrink: 0,
+                          flexShrink:
+                            0,
 
                           padding:
                             "9px 13px",
 
-                          fontSize: 12,
+                          fontSize:
+                            12,
                         }}
                       >
                         {copiedId ===
@@ -846,11 +1087,14 @@ export default function TicketPage() {
                   !ticket.watch_code && (
                     <div
                       style={{
-                        fontSize: 12,
+                        fontSize:
+                          12,
 
-                        opacity: 0.45,
+                        opacity:
+                          0.45,
 
-                        marginBottom: 24,
+                        marginBottom:
+                          24,
                       }}
                     >
                       Watch info not added yet.
@@ -859,11 +1103,14 @@ export default function TicketPage() {
 
                 <div
                   style={{
-                    fontSize: 11,
+                    fontSize:
+                      11,
 
-                    letterSpacing: 2,
+                    letterSpacing:
+                      2,
 
-                    opacity: 0.5,
+                    opacity:
+                      0.5,
                   }}
                 >
                   {ticket.festival_id
@@ -878,8 +1125,11 @@ export default function TicketPage() {
 
       <div
         style={{
-          marginTop: 28,
-          textAlign: "center",
+          marginTop:
+            28,
+
+          textAlign:
+            "center",
         }}
       >
         <BackButton bottom />
