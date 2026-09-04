@@ -328,23 +328,23 @@ a {
 
   .header {
     display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 22px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    margin-bottom: 30px;
     position: relative;
   }
 
   .header > div:first-child {
+    width: 100%;
     min-width: 0;
-    flex: 1;
+    padding-right: 86px;
   }
 
   .brand {
-    font-size: 28px;
-    letter-spacing: 0.09em;
-    line-height: 1;
+    font-size: 27px;
+    letter-spacing: 0.08em;
+    line-height: 1.05;
     word-break: break-word;
   }
 
@@ -354,42 +354,35 @@ a {
   }
 
   /*
-    HISTORY / TICKET / FESTIVAL
-    单独返回按钮放右边
+    History / Ticket / Festival：
+    单独返回按钮固定在右上角
   */
 
   .header > a,
   .header > button {
-    flex-shrink: 0;
+    position: absolute;
+    top: 0;
+    right: 0;
     width: auto !important;
-    align-self: flex-start;
-    padding: 8px 12px !important;
-    font-size: 10px !important;
-    line-height: 1.15;
+    max-width: 82px;
+    padding: 8px 11px !important;
+    font-size: 9px !important;
+    line-height: 1.1;
     white-space: nowrap;
   }
 
   /*
-    首页三个入口按钮
-    Tickets / History / Special Festival
-    放在标题下面
+    首页三个入口按钮：
+    正常占位，不用绝对定位
   */
 
   .header > div:last-child:not(:first-child):has(a:nth-child(3)) {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 68px;
+    position: static;
     display: grid !important;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px !important;
     width: 100%;
-  }
-
-  .header:has(
-    > div:last-child:not(:first-child):has(a:nth-child(3))
-  ) {
-    padding-bottom: 48px;
+    margin-top: 4px;
   }
 
   .header > div:last-child:not(:first-child):has(a:nth-child(3)) a {
@@ -406,29 +399,60 @@ a {
   }
 
   /*
-    手机端电影一排三个
+    首页 Pick a Movie 区域
+  */
+
+  .shell > div[style*="justify-content: space-between"] {
+    margin-top: 0 !important;
+    margin-bottom: 18px !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+
+  .shell > div[style*="justify-content: space-between"] h2 {
+    font-size: 20px !important;
+    line-height: 1.1 !important;
+  }
+
+  .shell
+    > div[style*="justify-content: space-between"]
+    > div
+    > div:first-child {
+    font-size: 9px !important;
+    letter-spacing: 1.8px !important;
+    margin-bottom: 5px !important;
+  }
+
+  .shell > div[style*="justify-content: space-between"] .primary {
+    padding: 9px 11px !important;
+    font-size: 9px !important;
+    white-space: nowrap;
+  }
+
+  /*
+    手机一排三个电影
   */
 
   .movie-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 18px 8px;
+    gap: 17px 7px;
   }
 
   .poster {
-    border-radius: 9px;
+    border-radius: 8px;
   }
 
   .movie-title {
-    margin-top: 7px;
-    padding: 0 1px;
-    font-size: 10px;
+    margin-top: 6px;
+    padding: 0;
+    font-size: 9px;
     line-height: 1.25;
   }
 
   .pick-button {
     margin-top: 5px;
-    padding: 7px 4px;
-    font-size: 9px;
+    padding: 6px 3px;
+    font-size: 8px;
     background: rgba(255, 255, 255, 0.02);
   }
 
@@ -499,9 +523,17 @@ a {
     padding-right: 11px;
   }
 
+  .header {
+    margin-bottom: 28px;
+  }
+
+  .header > div:first-child {
+    padding-right: 76px;
+  }
+
   .brand {
-    font-size: 25px;
-    letter-spacing: 0.08em;
+    font-size: 24px;
+    letter-spacing: 0.07em;
   }
 
   .subtitle {
@@ -510,12 +542,12 @@ a {
 
   .header > a,
   .header > button {
-    padding: 7px 10px !important;
-    font-size: 9px !important;
+    max-width: 72px;
+    padding: 7px 9px !important;
+    font-size: 8px !important;
   }
 
   .header > div:last-child:not(:first-child):has(a:nth-child(3)) {
-    top: 64px;
     gap: 5px !important;
   }
 
@@ -524,23 +556,26 @@ a {
     font-size: 8px !important;
   }
 
-  .header:has(
-    > div:last-child:not(:first-child):has(a:nth-child(3))
-  ) {
-    padding-bottom: 45px;
+  .shell > div[style*="justify-content: space-between"] h2 {
+    font-size: 18px !important;
+  }
+
+  .shell > div[style*="justify-content: space-between"] .primary {
+    padding: 8px 9px !important;
+    font-size: 8px !important;
   }
 
   .movie-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px 6px;
+    gap: 15px 6px;
   }
 
   .poster {
-    border-radius: 8px;
+    border-radius: 7px;
   }
 
   .movie-title {
-    font-size: 9px;
+    font-size: 8px;
   }
 
   .pick-button {
