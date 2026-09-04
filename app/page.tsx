@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { Movie } from "@/types/movie";
 
@@ -26,6 +27,8 @@ type Showtime = {
 };
 
 export default function HomePage() {
+  const router = useRouter();
+
   const [movies, setMovies] = useState<Movie[]>([]);
   const [screening, setScreening] = useState<Screening | null>(null);
   const [showtimes, setShowtimes] = useState<Showtime[]>([]);
@@ -51,27 +54,27 @@ export default function HomePage() {
     const { data: screeningData } = await supabase
       .from("screenings")
       .select("*")
+      .eq("status", "waiting_schedule")
       .order("created_at", { ascending: false })
       .limit(1);
 
-    const latestScreening =
+    const currentScreening =
       screeningData && screeningData.length > 0
         ? (screeningData[0] as Screening)
         : null;
 
-    setScreening(latestScreening);
+    setScreening(currentScreening);
 
-    if (latestScreening) {
+    if (currentScreening) {
       const { data: showtimeData } = await supabase
         .from("showtimes")
         .select("*")
-        .eq("screening_id", latestScreening.id)
+        .eq("screening_id", currentScreening.id)
+        .eq("status", "available")
         .order("screening_date", { ascending: true })
         .order("screening_time", { ascending: true });
 
-      setShowtimes(
-        (showtimeData ?? []) as Showtime[]
-      );
+      setShowtimes((showtimeData ?? []) as Showtime[]);
     } else {
       setShowtimes([]);
     }
@@ -132,26 +135,21 @@ export default function HomePage() {
     if (!movies.length) return;
 
     setChosenMovie(
-      movies[
-        Math.floor(
-          Math.random() * movies.length
-        )
-      ]
+      movies[Math.floor(Math.random() * movies.length)]
     );
   }
 
   async function confirmMovie(movie: Movie) {
     setWorking(true);
 
-    const { error: screeningError } =
-      await supabase
-        .from("screenings")
-        .insert({
-          movie_id: movie.id,
-          movie_title: movie.title,
-          poster_url: movie.poster_url,
-          status: "waiting_schedule",
-        });
+    const { error: screeningError } = await supabase
+      .from("screenings")
+      .insert({
+        movie_id: movie.id,
+        movie_title: movie.title,
+        poster_url: movie.poster_url,
+        status: "waiting_schedule",
+      });
 
     if (screeningError) {
       setWorking(false);
@@ -159,14 +157,13 @@ export default function HomePage() {
       return;
     }
 
-    const { error: movieError } =
-      await supabase
-        .from("movies")
-        .update({
-          status: "selected",
-        })
-        .eq("id", movie.id)
-        .eq("status", "available");
+    const { error: movieError } = await supabase
+      .from("movies")
+      .update({
+        status: "selected",
+      })
+      .eq("id", movie.id)
+      .eq("status", "available");
 
     setWorking(false);
 
@@ -179,21 +176,18 @@ export default function HomePage() {
     await loadData();
   }
 
-  async function confirmShowtime(
-    showtime: Showtime
-  ) {
+  async function confirmShowtime(showtime: Showtime) {
     if (!screening) return;
 
     setWorking(true);
 
-    const { error: showtimeError } =
-      await supabase
-        .from("showtimes")
-        .update({
-          status: "selected",
-        })
-        .eq("id", showtime.id)
-        .eq("status", "available");
+    const { error: showtimeError } = await supabase
+      .from("showtimes")
+      .update({
+        status: "selected",
+      })
+      .eq("id", showtime.id)
+      .eq("status", "available");
 
     if (showtimeError) {
       setWorking(false);
@@ -201,17 +195,14 @@ export default function HomePage() {
       return;
     }
 
-    const { error: screeningError } =
-      await supabase
-        .from("screenings")
-        .update({
-          status: "scheduled",
-          screening_date:
-            showtime.screening_date,
-          screening_time:
-            showtime.screening_time,
-        })
-        .eq("id", screening.id);
+    const { error: screeningError } = await supabase
+      .from("screenings")
+      .update({
+        status: "scheduled",
+        screening_date: showtime.screening_date,
+        screening_time: showtime.screening_time,
+      })
+      .eq("id", screening.id);
 
     setWorking(false);
 
@@ -221,39 +212,27 @@ export default function HomePage() {
     }
 
     setChosenShowtime(null);
-    await loadData();
+
+    router.push("/ticket");
   }
 
   function formatDate(date: string) {
     const parts = date.split("-");
 
-    if (parts.length !== 3) {
-      return date;
-    }
+    if (parts.length !== 3) return date;
 
     const year = Number(parts[0]);
     const month = Number(parts[1]);
     const day = Number(parts[2]);
 
-    return new Intl.DateTimeFormat(
-      "en-US",
-      {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      }
-    ).format(
-      new Date(
-        Date.UTC(year, month - 1, day)
-      )
+    return new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(
+      new Date(Date.UTC(year, month - 1, day))
     );
   }
-
-  const availableShowtimes =
-    showtimes.filter(
-      (showtime) =>
-        showtime.status === "available"
-    );
 
   if (loading) {
     return (
@@ -266,117 +245,8 @@ export default function HomePage() {
   }
 
   /*
-    STATE 1
-    Final ticket
-  */
-  if (
-    screening &&
-    screening.status === "scheduled"
-  ) {
-    return (
-      <main className="shell">
-        <header className="header">
-          <div>
-            <h1 className="brand">
-              OUR CINEMA
-            </h1>
-            <div className="subtitle">
-              Your Movie Ticket
-            </div>
-          </div>
-
-          <Link
-            href="/admin"
-            className="admin-link"
-          >
-            Admin
-          </Link>
-        </header>
-
-        <section
-          className="admin-card"
-          style={{
-            textAlign: "center",
-            padding: 28,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 12,
-              letterSpacing: 3,
-              opacity: 0.65,
-              marginBottom: 18,
-            }}
-          >
-            ADMIT TWO
-          </div>
-
-          <img
-            src={screening.poster_url}
-            alt={screening.movie_title}
-            style={{
-              width: "min(220px, 70%)",
-              borderRadius: 10,
-              marginBottom: 22,
-            }}
-          />
-
-          <h2
-            style={{
-              fontSize: 28,
-              marginBottom: 20,
-            }}
-          >
-            {screening.movie_title}
-          </h2>
-
-          <div
-            style={{
-              fontSize: 18,
-              marginBottom: 8,
-            }}
-          >
-            {screening.screening_date
-              ? formatDate(
-                  screening.screening_date
-                )
-              : ""}
-          </div>
-
-          <div
-            style={{
-              fontSize: 32,
-              fontWeight: 700,
-              letterSpacing: 2,
-            }}
-          >
-            {screening.screening_time?.slice(
-              0,
-              5
-            )}
-          </div>
-
-          <div
-            style={{
-              marginTop: 28,
-              paddingTop: 20,
-              borderTop:
-                "1px dashed rgba(255,255,255,0.25)",
-              fontSize: 13,
-              letterSpacing: 2,
-              opacity: 0.65,
-            }}
-          >
-            OUR CINEMA · TWO SEATS
-          </div>
-        </section>
-      </main>
-    );
-  }
-
-  /*
-    STATE 2
-    Movie selected, choose showtime
+    Movie already selected:
+    choose showtime
   */
   if (screening) {
     return (
@@ -393,10 +263,10 @@ export default function HomePage() {
           </div>
 
           <Link
-            href="/admin"
+            href="/ticket"
             className="admin-link"
           >
-            Admin
+            Ticket
           </Link>
         </header>
 
@@ -420,8 +290,7 @@ export default function HomePage() {
             {screening.movie_title}
           </h2>
 
-          {availableShowtimes.length ===
-          0 ? (
+          {showtimes.length === 0 ? (
             <div
               className="status"
               style={{
@@ -438,32 +307,28 @@ export default function HomePage() {
                 gap: 12,
               }}
             >
-              {availableShowtimes.map(
-                (showtime) => (
-                  <button
-                    key={showtime.id}
-                    className="secondary"
-                    style={{
-                      padding: 16,
-                      fontSize: 16,
-                    }}
-                    onClick={() =>
-                      setChosenShowtime(
-                        showtime
-                      )
-                    }
-                  >
-                    {formatDate(
-                      showtime.screening_date
-                    )}
-                    {" · "}
-                    {showtime.screening_time.slice(
-                      0,
-                      5
-                    )}
-                  </button>
-                )
-              )}
+              {showtimes.map((showtime) => (
+                <button
+                  key={showtime.id}
+                  className="secondary"
+                  style={{
+                    padding: 16,
+                    fontSize: 16,
+                  }}
+                  onClick={() =>
+                    setChosenShowtime(showtime)
+                  }
+                >
+                  {formatDate(
+                    showtime.screening_date
+                  )}
+                  {" · "}
+                  {showtime.screening_time.slice(
+                    0,
+                    5
+                  )}
+                </button>
+              ))}
             </div>
           )}
         </section>
@@ -528,8 +393,8 @@ export default function HomePage() {
   }
 
   /*
-    STATE 3
-    Pick movie
+    No selected movie:
+    choose movie
   */
   return (
     <main className="shell">
@@ -545,10 +410,10 @@ export default function HomePage() {
         </div>
 
         <Link
-          href="/admin"
+          href="/ticket"
           className="admin-link"
         >
-          Admin
+          Ticket
         </Link>
       </header>
 
