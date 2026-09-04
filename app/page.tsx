@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { Movie } from "@/types/movie";
@@ -29,20 +32,33 @@ type Showtime = {
 export default function HomePage() {
   const router = useRouter();
 
-  const [movies, setMovies] = useState<Movie[]>([]);
+  const [movies, setMovies] =
+    useState<Movie[]>([]);
+
   const [screening, setScreening] =
-    useState<Screening | null>(null);
+    useState<Screening | null>(
+      null
+    );
 
   const [showtimes, setShowtimes] =
     useState<Showtime[]>([]);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [chosenMovie, setChosenMovie] =
-    useState<Movie | null>(null);
+  const [
+    chosenMovie,
+    setChosenMovie,
+  ] = useState<Movie | null>(
+    null
+  );
 
-  const [chosenShowtime, setChosenShowtime] =
-    useState<Showtime | null>(null);
+  const [
+    chosenShowtime,
+    setChosenShowtime,
+  ] = useState<Showtime | null>(
+    null
+  );
 
   const [working, setWorking] =
     useState(false);
@@ -51,36 +67,41 @@ export default function HomePage() {
     setLoading(true);
 
     /*
-      Available movie pool
+      AVAILABLE MOVIE POOL
     */
-    const { data: movieData } = await supabase
-      .from("movies")
-      .select("*")
-      .eq("status", "available")
-      .order("created_at", {
-        ascending: true,
-      });
+    const { data: movieData } =
+      await supabase
+        .from("movies")
+        .select("*")
+        .eq(
+          "status",
+          "available"
+        )
+        .order("created_at", {
+          ascending: true,
+        });
 
     setMovies(
       (movieData ?? []) as Movie[]
     );
 
     /*
-      Only look for a movie that
-      is currently waiting for showtime selection
+      CURRENT MOVIE WAITING
+      FOR SHOWTIME SELECTION
     */
-    const { data: screeningData } =
-      await supabase
-        .from("screenings")
-        .select("*")
-        .eq(
-          "status",
-          "waiting_schedule"
-        )
-        .order("created_at", {
-          ascending: false,
-        })
-        .limit(1);
+    const {
+      data: screeningData,
+    } = await supabase
+      .from("screenings")
+      .select("*")
+      .eq(
+        "status",
+        "waiting_schedule"
+      )
+      .order("created_at", {
+        ascending: false,
+      })
+      .limit(1);
 
     const currentScreening =
       screeningData &&
@@ -88,36 +109,40 @@ export default function HomePage() {
         ? (screeningData[0] as Screening)
         : null;
 
-    setScreening(currentScreening);
+    setScreening(
+      currentScreening
+    );
 
     if (currentScreening) {
-      const { data: showtimeData } =
-        await supabase
-          .from("showtimes")
-          .select("*")
-          .eq(
-            "screening_id",
-            currentScreening.id
-          )
-          .eq(
-            "status",
-            "available"
-          )
-          .order(
-            "screening_date",
-            {
-              ascending: true,
-            }
-          )
-          .order(
-            "screening_time",
-            {
-              ascending: true,
-            }
-          );
+      const {
+        data: showtimeData,
+      } = await supabase
+        .from("showtimes")
+        .select("*")
+        .eq(
+          "screening_id",
+          currentScreening.id
+        )
+        .eq(
+          "status",
+          "available"
+        )
+        .order(
+          "screening_date",
+          {
+            ascending: true,
+          }
+        )
+        .order(
+          "screening_time",
+          {
+            ascending: true,
+          }
+        );
 
       setShowtimes(
-        (showtimeData ?? []) as Showtime[]
+        (showtimeData ??
+          []) as Showtime[]
       );
     } else {
       setShowtimes([]);
@@ -129,49 +154,66 @@ export default function HomePage() {
   useEffect(() => {
     loadData();
 
-    const movieChannel = supabase
-      .channel("guest-movies-live")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "movies",
-        },
-        () => loadData()
-      )
-      .subscribe();
+    const movieChannel =
+      supabase
+        .channel(
+          "guest-movies-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "movies",
+          },
+          () => loadData()
+        )
+        .subscribe();
 
-    const screeningChannel = supabase
-      .channel("guest-screenings-live")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "screenings",
-        },
-        () => loadData()
-      )
-      .subscribe();
+    const screeningChannel =
+      supabase
+        .channel(
+          "guest-screenings-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "screenings",
+          },
+          () => loadData()
+        )
+        .subscribe();
 
-    const showtimeChannel = supabase
-      .channel("guest-showtimes-live")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "showtimes",
-        },
-        () => loadData()
-      )
-      .subscribe();
+    const showtimeChannel =
+      supabase
+        .channel(
+          "guest-showtimes-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "showtimes",
+          },
+          () => loadData()
+        )
+        .subscribe();
 
     return () => {
-      supabase.removeChannel(movieChannel);
-      supabase.removeChannel(screeningChannel);
-      supabase.removeChannel(showtimeChannel);
+      supabase.removeChannel(
+        movieChannel
+      );
+
+      supabase.removeChannel(
+        screeningChannel
+      );
+
+      supabase.removeChannel(
+        showtimeChannel
+      );
     };
   }, []);
 
@@ -197,31 +239,38 @@ export default function HomePage() {
     setWorking(true);
 
     /*
-      Create waiting screening
+      CREATE SCREENING
     */
     const {
-      error: screeningError,
+      error:
+        screeningError,
     } = await supabase
       .from("screenings")
       .insert({
-        movie_id: movie.id,
-        movie_title: movie.title,
+        movie_id:
+          movie.id,
+        movie_title:
+          movie.title,
         poster_url:
           movie.poster_url,
         status:
           "waiting_schedule",
       });
 
-    if (screeningError) {
+    if (
+      screeningError
+    ) {
       setWorking(false);
+
       alert(
         screeningError.message
       );
+
       return;
     }
 
     /*
-      Remove from available pool
+      REMOVE MOVIE FROM POOL
     */
     const {
       error: movieError,
@@ -230,7 +279,10 @@ export default function HomePage() {
       .update({
         status: "selected",
       })
-      .eq("id", movie.id)
+      .eq(
+        "id",
+        movie.id
+      )
       .eq(
         "status",
         "available"
@@ -242,6 +294,7 @@ export default function HomePage() {
       alert(
         movieError.message
       );
+
       return;
     }
 
@@ -260,7 +313,7 @@ export default function HomePage() {
     setWorking(true);
 
     /*
-      Mark selected showtime
+      MARK SHOWTIME SELECTED
     */
     const {
       error: showtimeError,
@@ -278,19 +331,24 @@ export default function HomePage() {
         "available"
       );
 
-    if (showtimeError) {
+    if (
+      showtimeError
+    ) {
       setWorking(false);
+
       alert(
         showtimeError.message
       );
+
       return;
     }
 
     /*
-      Generate final screening/ticket
+      GENERATE TICKET
     */
     const {
-      error: screeningError,
+      error:
+        screeningError,
     } = await supabase
       .from("screenings")
       .update({
@@ -307,18 +365,20 @@ export default function HomePage() {
 
     setWorking(false);
 
-    if (screeningError) {
+    if (
+      screeningError
+    ) {
       alert(
         screeningError.message
       );
+
       return;
     }
 
-    setChosenShowtime(null);
+    setChosenShowtime(
+      null
+    );
 
-    /*
-      Go to ticket page
-    */
     router.push("/ticket");
   }
 
@@ -367,6 +427,7 @@ export default function HomePage() {
         className="header"
         style={{
           alignItems: "center",
+          gap: 16,
         }}
       >
         <div>
@@ -375,22 +436,59 @@ export default function HomePage() {
           </h1>
         </div>
 
-        <Link
-          href="/ticket"
-          className="primary"
+        <div
           style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 7,
-            textDecoration: "none",
-            padding: "11px 17px",
-            fontSize: 14,
-            fontWeight: 600,
-            whiteSpace: "nowrap",
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
+            justifyContent:
+              "flex-end",
           }}
         >
-          🎟 View Ticket
-        </Link>
+          <Link
+            href="/ticket"
+            className="primary"
+            style={{
+              display:
+                "inline-flex",
+              alignItems:
+                "center",
+              gap: 7,
+              textDecoration:
+                "none",
+              padding:
+                "11px 17px",
+              fontSize: 14,
+              fontWeight: 600,
+              whiteSpace:
+                "nowrap",
+            }}
+          >
+            🎟 View Ticket
+          </Link>
+
+          <Link
+            href="/history"
+            className="secondary"
+            style={{
+              display:
+                "inline-flex",
+              alignItems:
+                "center",
+              gap: 7,
+              textDecoration:
+                "none",
+              padding:
+                "11px 17px",
+              fontSize: 14,
+              fontWeight: 600,
+              whiteSpace:
+                "nowrap",
+            }}
+          >
+            🎬 Watch History
+          </Link>
+        </div>
       </header>
     );
   }
@@ -406,8 +504,7 @@ export default function HomePage() {
   }
 
   /*
-    A movie has already been selected.
-    Guest now chooses a showtime.
+    SHOWTIME SELECTION
   */
   if (screening) {
     return (
@@ -417,15 +514,18 @@ export default function HomePage() {
         <section
           className="admin-card"
           style={{
-            textAlign: "center",
+            textAlign:
+              "center",
+            padding:
+              "30px 22px",
           }}
         >
           <div
             style={{
-              fontSize: 12,
-              letterSpacing: 2,
-              opacity: 0.5,
-              marginBottom: 16,
+              fontSize: 11,
+              letterSpacing: 2.5,
+              opacity: 0.48,
+              marginBottom: 18,
             }}
           >
             CHOOSE A SHOWTIME
@@ -439,17 +539,34 @@ export default function HomePage() {
               screening.movie_title
             }
             style={{
-              width: 150,
-              borderRadius: 8,
-              marginBottom: 16,
+              width:
+                "min(175px, 60%)",
+              borderRadius: 10,
+              marginBottom: 18,
             }}
           />
 
-          <h2>
+          <h2
+            style={{
+              fontSize: 26,
+              marginBottom: 8,
+            }}
+          >
             {
               screening.movie_title
             }
           </h2>
+
+          <div
+            style={{
+              fontSize: 13,
+              opacity: 0.48,
+              marginBottom: 26,
+            }}
+          >
+            Pick the time that
+            works best for us.
+          </div>
 
           {showtimes.length ===
           0 ? (
@@ -457,14 +574,16 @@ export default function HomePage() {
               className="status"
               style={{
                 marginTop: 20,
+                padding:
+                  "22px 0",
               }}
             >
-              Waiting for showtimes…
+              Waiting for
+              showtimes…
             </div>
           ) : (
             <div
               style={{
-                marginTop: 24,
                 display: "grid",
                 gap: 12,
               }}
@@ -477,8 +596,10 @@ export default function HomePage() {
                     }
                     className="secondary"
                     style={{
-                      padding: 16,
+                      padding:
+                        "17px 18px",
                       fontSize: 16,
+                      borderRadius: 10,
                     }}
                     onClick={() =>
                       setChosenShowtime(
@@ -567,7 +688,7 @@ export default function HomePage() {
   }
 
   /*
-    Normal movie selection page
+    MOVIE SELECTION
   */
   return (
     <main className="shell">
