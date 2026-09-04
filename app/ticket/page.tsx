@@ -21,57 +21,89 @@ type Screening = {
 };
 
 export default function TicketPage() {
-  const [ticket, setTicket] =
-    useState<Screening | null>(
-      null
-    );
+  const [tickets, setTickets] =
+    useState<Screening[]>([]);
 
   const [loading, setLoading] =
     useState(true);
 
-  const [copied, setCopied] =
-    useState(false);
+  const [copiedId, setCopiedId] =
+    useState<number | null>(null);
 
-  async function loadTicket() {
+  async function loadTickets() {
     setLoading(true);
 
     const { data, error } =
       await supabase
         .from("screenings")
         .select("*")
-        .order("created_at", {
-          ascending: false,
-        })
-        .limit(1);
+        .eq(
+          "status",
+          "scheduled"
+        )
+        .not(
+          "screening_date",
+          "is",
+          null
+        )
+        .not(
+          "screening_time",
+          "is",
+          null
+        )
+        .order(
+          "screening_date",
+          {
+            ascending: true,
+          }
+        )
+        .order(
+          "screening_time",
+          {
+            ascending: true,
+          }
+        );
 
     if (error) {
       console.error(error);
-      setTicket(null);
+      setTickets([]);
       setLoading(false);
       return;
     }
 
-    const latest =
-      data &&
-      data.length > 0
-        ? (data[0] as Screening)
-        : null;
+    const now = new Date();
 
-    setTicket(
-      latest?.status ===
-        "scheduled"
-        ? latest
-        : null
+    const activeTickets =
+      (
+        (data ?? []) as Screening[]
+      ).filter((ticket) => {
+        if (
+          !ticket.screening_date ||
+          !ticket.screening_time
+        ) {
+          return false;
+        }
+
+        const ticketTime =
+          new Date(
+            `${ticket.screening_date}T${ticket.screening_time}`
+          );
+
+        return ticketTime >= now;
+      });
+
+    setTickets(
+      activeTickets
     );
 
     setLoading(false);
   }
 
   useEffect(() => {
-    loadTicket();
+    loadTickets();
 
     const channel = supabase
-      .channel("ticket-live")
+      .channel("tickets-live")
       .on(
         "postgres_changes",
         {
@@ -79,7 +111,7 @@ export default function TicketPage() {
           schema: "public",
           table: "screenings",
         },
-        () => loadTicket()
+        () => loadTickets()
       )
       .subscribe();
 
@@ -129,9 +161,11 @@ export default function TicketPage() {
     );
   }
 
-  async function copyCode() {
+  async function copyCode(
+    ticket: Screening
+  ) {
     if (
-      !ticket?.watch_code
+      !ticket.watch_code
     ) {
       return;
     }
@@ -141,10 +175,12 @@ export default function TicketPage() {
         ticket.watch_code
       );
 
-      setCopied(true);
+      setCopiedId(
+        ticket.id
+      );
 
       setTimeout(() => {
-        setCopied(false);
+        setCopiedId(null);
       }, 1800);
     } catch {
       alert(
@@ -159,6 +195,7 @@ export default function TicketPage() {
         className="header"
         style={{
           alignItems: "center",
+          gap: 16,
         }}
       >
         <div>
@@ -167,7 +204,7 @@ export default function TicketPage() {
           </h1>
 
           <div className="subtitle">
-            Movie Ticket
+            Movie Tickets
           </div>
         </div>
 
@@ -199,13 +236,15 @@ export default function TicketPage() {
     return (
       <main className="shell">
         <div className="empty">
-          Loading ticket…
+          Loading tickets…
         </div>
       </main>
     );
   }
 
-  if (!ticket) {
+  if (
+    tickets.length === 0
+  ) {
     return (
       <main className="shell">
         <Header />
@@ -244,10 +283,9 @@ export default function TicketPage() {
               lineHeight: 1.6,
             }}
           >
-            Your ticket will
+            Your tickets will
             appear here after
-            you choose a
-            showtime.
+            you choose showtimes.
           </div>
 
           <Link
@@ -275,231 +313,247 @@ export default function TicketPage() {
     <main className="shell">
       <Header />
 
-      <section
-        className="admin-card"
+      <div
         style={{
-          textAlign:
-            "center",
-          padding: 30,
+          display: "grid",
+          gap: 24,
         }}
       >
-        <div
-          style={{
-            fontSize: 11,
-            letterSpacing: 3,
-            opacity: 0.55,
-            marginBottom: 22,
-          }}
-        >
-          ADMIT TWO
-        </div>
-
-        <img
-          src={
-            ticket.poster_url
-          }
-          alt={
-            ticket.movie_title
-          }
-          style={{
-            width:
-              "min(240px, 76%)",
-            borderRadius: 12,
-            marginBottom: 26,
-          }}
-        />
-
-        <h2
-          style={{
-            fontSize: 30,
-            marginBottom: 22,
-            lineHeight: 1.15,
-          }}
-        >
-          {
-            ticket.movie_title
-          }
-        </h2>
-
-        <div
-          style={{
-            fontSize: 17,
-            opacity: 0.75,
-            marginBottom: 8,
-          }}
-        >
-          {ticket.screening_date
-            ? formatDate(
-                ticket.screening_date
-              )
-            : ""}
-        </div>
-
-        <div
-          style={{
-            fontSize: 38,
-            fontWeight: 700,
-            letterSpacing: 2,
-          }}
-        >
-          {ticket.screening_time?.slice(
-            0,
-            5
-          )}
-        </div>
-
-        <div
-          style={{
-            marginTop: 30,
-            paddingTop: 22,
-            borderTop:
-              "1px dashed rgba(255,255,255,0.25)",
-          }}
-        >
-          {ticket.watch_url && (
-            <a
-              href={
-                ticket.watch_url
-              }
-              target="_blank"
-              rel="noopener noreferrer"
-              className="primary"
+        {tickets.map(
+          (ticket) => (
+            <section
+              key={ticket.id}
+              className="admin-card"
               style={{
-                display:
-                  "block",
-                width: "100%",
-                boxSizing:
-                  "border-box",
-                textDecoration:
-                  "none",
-                padding:
-                  "15px 20px",
-                fontSize: 16,
-                fontWeight: 650,
-                marginBottom:
-                  ticket.watch_code
-                    ? 14
-                    : 24,
-              }}
-            >
-              ▶ Watch Movie
-            </a>
-          )}
-
-          {ticket.watch_code && (
-            <div
-              style={{
-                padding:
-                  "16px 18px",
-                border:
-                  "1px solid rgba(255,255,255,0.10)",
-                borderRadius: 12,
-                background:
-                  "rgba(255,255,255,0.025)",
-                marginBottom: 24,
-                textAlign: "left",
+                textAlign:
+                  "center",
+                padding: 30,
               }}
             >
               <div
                 style={{
-                  fontSize: 10,
-                  letterSpacing: 2,
-                  opacity: 0.45,
-                  marginBottom: 9,
+                  fontSize: 11,
+                  letterSpacing: 3,
+                  opacity: 0.55,
+                  marginBottom: 22,
                 }}
               >
-                ACCESS CODE
+                ADMIT TWO
+              </div>
+
+              <img
+                src={
+                  ticket.poster_url
+                }
+                alt={
+                  ticket.movie_title
+                }
+                style={{
+                  width:
+                    "min(240px, 76%)",
+                  borderRadius: 12,
+                  marginBottom: 26,
+                }}
+              />
+
+              <h2
+                style={{
+                  fontSize: 30,
+                  marginBottom: 22,
+                  lineHeight: 1.15,
+                }}
+              >
+                {
+                  ticket.movie_title
+                }
+              </h2>
+
+              <div
+                style={{
+                  fontSize: 17,
+                  opacity: 0.75,
+                  marginBottom: 8,
+                }}
+              >
+                {ticket.screening_date
+                  ? formatDate(
+                      ticket.screening_date
+                    )
+                  : ""}
               </div>
 
               <div
                 style={{
-                  display: "flex",
-                  justifyContent:
-                    "space-between",
-                  alignItems:
-                    "center",
-                  gap: 12,
+                  fontSize: 38,
+                  fontWeight: 700,
+                  letterSpacing: 2,
                 }}
               >
+                {ticket.screening_time?.slice(
+                  0,
+                  5
+                )}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 30,
+                  paddingTop: 22,
+                  borderTop:
+                    "1px dashed rgba(255,255,255,0.25)",
+                }}
+              >
+                {ticket.watch_url && (
+                  <a
+                    href={
+                      ticket.watch_url
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="primary"
+                    style={{
+                      display:
+                        "block",
+                      width: "100%",
+                      boxSizing:
+                        "border-box",
+                      textDecoration:
+                        "none",
+                      padding:
+                        "15px 20px",
+                      fontSize: 16,
+                      fontWeight: 650,
+                      marginBottom:
+                        ticket.watch_code
+                          ? 14
+                          : 24,
+                    }}
+                  >
+                    ▶ Watch Movie
+                  </a>
+                )}
+
+                {ticket.watch_code && (
+                  <div
+                    style={{
+                      padding:
+                        "16px 18px",
+                      border:
+                        "1px solid rgba(255,255,255,0.10)",
+                      borderRadius: 12,
+                      background:
+                        "rgba(255,255,255,0.025)",
+                      marginBottom: 24,
+                      textAlign: "left",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 10,
+                        letterSpacing: 2,
+                        opacity: 0.45,
+                        marginBottom: 9,
+                      }}
+                    >
+                      ACCESS CODE
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent:
+                          "space-between",
+                        alignItems:
+                          "center",
+                        gap: 12,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 22,
+                          fontWeight: 700,
+                          letterSpacing: 2,
+                          wordBreak:
+                            "break-all",
+                        }}
+                      >
+                        {
+                          ticket.watch_code
+                        }
+                      </div>
+
+                      <button
+                        className="secondary"
+                        onClick={() =>
+                          copyCode(
+                            ticket
+                          )
+                        }
+                        style={{
+                          flexShrink: 0,
+                          padding:
+                            "9px 13px",
+                          fontSize: 12,
+                        }}
+                      >
+                        {copiedId ===
+                        ticket.id
+                          ? "Copied ✓"
+                          : "Copy"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!ticket.watch_url &&
+                  !ticket.watch_code && (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        opacity: 0.45,
+                        marginBottom: 24,
+                      }}
+                    >
+                      Watch info not added yet.
+                    </div>
+                  )}
+
                 <div
                   style={{
-                    fontSize: 22,
-                    fontWeight: 700,
+                    fontSize: 11,
                     letterSpacing: 2,
-                    wordBreak:
-                      "break-all",
+                    opacity: 0.5,
                   }}
                 >
-                  {
-                    ticket.watch_code
-                  }
+                  OUR CINEMA · TWO SEATS
                 </div>
-
-                <button
-                  className="secondary"
-                  onClick={
-                    copyCode
-                  }
-                  style={{
-                    flexShrink: 0,
-                    padding:
-                      "9px 13px",
-                    fontSize: 12,
-                  }}
-                >
-                  {copied
-                    ? "Copied ✓"
-                    : "Copy"}
-                </button>
               </div>
-            </div>
-          )}
+            </section>
+          )
+        )}
+      </div>
 
-          {!ticket.watch_url &&
-            !ticket.watch_code && (
-              <div
-                style={{
-                  fontSize: 12,
-                  opacity: 0.45,
-                  marginBottom: 24,
-                }}
-              >
-                Watch info not added yet.
-              </div>
-            )}
-
-          <div
-            style={{
-              fontSize: 11,
-              letterSpacing: 2,
-              opacity: 0.5,
-            }}
-          >
-            OUR CINEMA · TWO SEATS
-          </div>
-        </div>
-
-        <div
+      <div
+        style={{
+          marginTop: 26,
+          textAlign: "center",
+        }}
+      >
+        <Link
+          href="/"
+          className="secondary"
           style={{
-            marginTop: 26,
+            display:
+              "inline-block",
+            textDecoration:
+              "none",
+            padding:
+              "11px 20px",
           }}
         >
-          <Link
-            href="/"
-            className="secondary"
-            style={{
-              display:
-                "inline-block",
-              textDecoration:
-                "none",
-              padding:
-                "11px 20px",
-            }}
-          >
-            ← Movies
-          </Link>
-        </div>
-      </section>
+          ← Movies
+        </Link>
+      </div>
     </main>
   );
 }
