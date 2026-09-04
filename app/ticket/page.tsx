@@ -91,10 +91,7 @@ export default function TicketPage() {
         return ticketTime >= now;
       });
 
-    setTickets(
-      activeTickets
-    );
-
+    setTickets(activeTickets);
     setLoading(false);
   }
 
@@ -120,6 +117,10 @@ export default function TicketPage() {
       );
     };
   }, []);
+
+  function goHome() {
+    window.location.replace("/");
+  }
 
   function formatDate(
     date: string
@@ -163,9 +164,7 @@ export default function TicketPage() {
   async function copyCode(
     ticket: Screening
   ) {
-    if (
-      !ticket.watch_code
-    ) {
+    if (!ticket.watch_code) {
       return;
     }
 
@@ -188,6 +187,53 @@ export default function TicketPage() {
     }
   }
 
+  function BackButton({
+    bottom = false,
+  }: {
+    bottom?: boolean;
+  }) {
+    return (
+      <button
+        type="button"
+        onClick={goHome}
+        className={
+          bottom
+            ? "secondary"
+            : "primary"
+        }
+        style={{
+          display:
+            "inline-flex",
+          alignItems:
+            "center",
+          justifyContent:
+            "center",
+          gap: 8,
+          padding:
+            bottom
+              ? "10px 17px"
+              : "11px 18px",
+          fontSize: 13,
+          fontWeight: 600,
+          letterSpacing: 0.3,
+          whiteSpace:
+            "nowrap",
+          cursor: "pointer",
+        }}
+      >
+        <span
+          style={{
+            fontSize: 15,
+            opacity: 0.75,
+          }}
+        >
+          ←
+        </span>
+        Cinema
+      </button>
+    );
+  }
+
   function Header() {
     return (
       <header
@@ -207,26 +253,7 @@ export default function TicketPage() {
           </div>
         </div>
 
-        <a
-          href="/"
-          className="primary"
-          style={{
-            display:
-              "inline-flex",
-            alignItems:
-              "center",
-            textDecoration:
-              "none",
-            padding:
-              "11px 18px",
-            fontSize: 14,
-            fontWeight: 600,
-            whiteSpace:
-              "nowrap",
-          }}
-        >
-          ← Movies
-        </a>
+        <BackButton />
       </header>
     );
   }
@@ -287,22 +314,7 @@ export default function TicketPage() {
             you choose showtimes.
           </div>
 
-          <a
-            href="/"
-            className="primary"
-            style={{
-              display:
-                "inline-block",
-              textDecoration:
-                "none",
-              padding:
-                "13px 22px",
-              fontSize: 15,
-              fontWeight: 600,
-            }}
-          >
-            ← Browse Movies
-          </a>
+          <BackButton />
         </section>
       </main>
     );
@@ -534,24 +546,11 @@ export default function TicketPage() {
 
       <div
         style={{
-          marginTop: 26,
+          marginTop: 28,
           textAlign: "center",
         }}
       >
-        <a
-          href="/"
-          className="secondary"
-          style={{
-            display:
-              "inline-block",
-            textDecoration:
-              "none",
-            padding:
-              "11px 20px",
-          }}
-        >
-          ← Movies
-        </a>
+        <BackButton bottom />
       </div>
     </main>
   );
