@@ -31,6 +31,9 @@ export default function HistoryPage() {
   const [saving, setSaving] =
     useState<string | null>(null);
 
+  const [deletingId, setDeletingId] =
+    useState<number | null>(null);
+
   async function loadHistory() {
     setLoading(true);
 
@@ -67,25 +70,21 @@ export default function HistoryPage() {
     const past =
       (
         (data ?? []) as Screening[]
-      ).filter(
-        (screening) => {
-          if (
-            !screening.screening_date ||
-            !screening.screening_time
-          ) {
-            return false;
-          }
-
-          const screeningDate =
-            new Date(
-              `${screening.screening_date}T${screening.screening_time}`
-            );
-
-          return (
-            screeningDate < now
-          );
+      ).filter((screening) => {
+        if (
+          !screening.screening_date ||
+          !screening.screening_time
+        ) {
+          return false;
         }
-      );
+
+        const screeningDate =
+          new Date(
+            `${screening.screening_date}T${screening.screening_time}`
+          );
+
+        return screeningDate < now;
+      });
 
     setHistory(past);
     setLoading(false);
@@ -172,6 +171,41 @@ export default function HistoryPage() {
     await loadHistory();
   }
 
+  async function deleteRecord(
+    screening: Screening
+  ) {
+    const confirmed =
+      window.confirm(
+        `Delete "${screening.movie_title}" from Watch History?`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingId(
+      screening.id
+    );
+
+    const { error } =
+      await supabase
+        .from("screenings")
+        .delete()
+        .eq(
+          "id",
+          screening.id
+        );
+
+    setDeletingId(null);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await loadHistory();
+  }
+
   function RatingRow({
     screening,
     person,
@@ -246,7 +280,6 @@ export default function HistoryPage() {
                     star
                   )
                 }
-                aria-label={`${label} ${star} stars`}
                 style={{
                   border: "none",
                   background:
@@ -271,19 +304,6 @@ export default function HistoryPage() {
             )
           )}
         </div>
-
-        {rating && (
-          <div
-            style={{
-              fontSize: 11,
-              opacity: 0.4,
-              marginTop: 8,
-            }}
-          >
-            Tap the same star again
-            to remove the rating.
-          </div>
-        )}
       </div>
     );
   }
@@ -480,6 +500,30 @@ export default function HistoryPage() {
                         screening.xia_rating
                       }
                     />
+
+                    <button
+                      className="danger"
+                      disabled={
+                        deletingId ===
+                        screening.id
+                      }
+                      onClick={() =>
+                        deleteRecord(
+                          screening
+                        )
+                      }
+                      style={{
+                        width: "100%",
+                        marginTop: 14,
+                        padding:
+                          "12px 16px",
+                      }}
+                    >
+                      {deletingId ===
+                      screening.id
+                        ? "Deleting…"
+                        : "Delete Record"}
+                    </button>
                   </div>
                 </div>
               </section>
