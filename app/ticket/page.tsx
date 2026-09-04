@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 import { supabase } from "@/lib/supabase";
 
 type Screening = {
@@ -16,18 +19,29 @@ type Screening = {
 };
 
 export default function TicketPage() {
-  const [ticket, setTicket] = useState<Screening | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [ticket, setTicket] =
+    useState<Screening | null>(
+      null
+    );
+
+  const [loading, setLoading] =
+    useState(true);
 
   async function loadTicket() {
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from("screenings")
-      .select("*")
-      .eq("status", "scheduled")
-      .order("created_at", { ascending: false })
-      .limit(1);
+    const { data, error } =
+      await supabase
+        .from("screenings")
+        .select("*")
+        .eq(
+          "status",
+          "scheduled"
+        )
+        .order("created_at", {
+          ascending: false,
+        })
+        .limit(1);
 
     if (error) {
       console.error(error);
@@ -36,12 +50,13 @@ export default function TicketPage() {
       return;
     }
 
-    const currentTicket =
-      data && data.length > 0
+    setTicket(
+      data &&
+        data.length > 0
         ? (data[0] as Screening)
-        : null;
+        : null
+    );
 
-    setTicket(currentTicket);
     setLoading(false);
   }
 
@@ -62,26 +77,41 @@ export default function TicketPage() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(
+        channel
+      );
     };
   }, []);
 
-  function formatDate(date: string) {
-    const parts = date.split("-");
+  function formatDate(
+    date: string
+  ) {
+    const parts =
+      date.split("-");
 
-    if (parts.length !== 3) {
+    if (
+      parts.length !== 3
+    ) {
       return date;
     }
 
-    const year = Number(parts[0]);
-    const month = Number(parts[1]);
-    const day = Number(parts[2]);
+    const year =
+      Number(parts[0]);
 
-    return new Intl.DateTimeFormat("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }).format(
+    const month =
+      Number(parts[1]);
+
+    const day =
+      Number(parts[2]);
+
+    return new Intl.DateTimeFormat(
+      "en-US",
+      {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }
+    ).format(
       new Date(
         Date.UTC(
           year,
@@ -89,6 +119,48 @@ export default function TicketPage() {
           day
         )
       )
+    );
+  }
+
+  function Header() {
+    return (
+      <header
+        className="header"
+        style={{
+          alignItems: "center",
+        }}
+      >
+        <div>
+          <h1 className="brand">
+            OUR CINEMA
+          </h1>
+
+          <div className="subtitle">
+            Movie Ticket
+          </div>
+        </div>
+
+        <Link
+          href="/"
+          className="primary"
+          style={{
+            display:
+              "inline-flex",
+            alignItems:
+              "center",
+            textDecoration:
+              "none",
+            padding:
+              "11px 18px",
+            fontSize: 14,
+            fontWeight: 600,
+            whiteSpace:
+              "nowrap",
+          }}
+        >
+          ← Movies
+        </Link>
+      </header>
     );
   }
 
@@ -102,36 +174,18 @@ export default function TicketPage() {
     );
   }
 
-  /*
-    没有票
-  */
   if (!ticket) {
     return (
       <main className="shell">
-        <header className="header">
-          <div>
-            <h1 className="brand">
-              OUR CINEMA
-            </h1>
-
-            <div className="subtitle">
-              Movie Ticket
-            </div>
-          </div>
-
-          <Link
-            href="/"
-            className="admin-link"
-          >
-            Movies
-          </Link>
-        </header>
+        <Header />
 
         <section
           className="admin-card"
           style={{
-            textAlign: "center",
-            padding: "52px 24px",
+            textAlign:
+              "center",
+            padding:
+              "52px 24px",
           }}
         >
           <div
@@ -159,54 +213,42 @@ export default function TicketPage() {
               lineHeight: 1.6,
             }}
           >
-            Your ticket will appear here
-            after you choose a showtime.
+            Your ticket will
+            appear here after
+            you choose a
+            showtime.
           </div>
 
           <Link
             href="/"
             className="primary"
             style={{
-              display: "inline-block",
-              textDecoration: "none",
-              padding: "12px 20px",
+              display:
+                "inline-block",
+              textDecoration:
+                "none",
+              padding:
+                "13px 22px",
+              fontSize: 15,
+              fontWeight: 600,
             }}
           >
-            Choose Movie
+            ← Browse Movies
           </Link>
         </section>
       </main>
     );
   }
 
-  /*
-    已经出票
-  */
   return (
     <main className="shell">
-      <header className="header">
-        <div>
-          <h1 className="brand">
-            OUR CINEMA
-          </h1>
-
-          <div className="subtitle">
-            Your Movie Ticket
-          </div>
-        </div>
-
-        <Link
-          href="/"
-          className="admin-link"
-        >
-          Movies
-        </Link>
-      </header>
+      <Header />
 
       <section
         className="admin-card"
         style={{
-          textAlign: "center",
+          textAlign:
+            "center",
           padding: 30,
         }}
       >
@@ -222,10 +264,15 @@ export default function TicketPage() {
         </div>
 
         <img
-          src={ticket.poster_url}
-          alt={ticket.movie_title}
+          src={
+            ticket.poster_url
+          }
+          alt={
+            ticket.movie_title
+          }
           style={{
-            width: "min(220px, 70%)",
+            width:
+              "min(220px, 70%)",
             borderRadius: 10,
             marginBottom: 24,
           }}
@@ -237,7 +284,9 @@ export default function TicketPage() {
             marginBottom: 22,
           }}
         >
-          {ticket.movie_title}
+          {
+            ticket.movie_title
+          }
         </h2>
 
         <div
@@ -278,6 +327,28 @@ export default function TicketPage() {
           }}
         >
           OUR CINEMA · TWO SEATS
+        </div>
+
+        <div
+          style={{
+            marginTop: 28,
+          }}
+        >
+          <Link
+            href="/"
+            className="primary"
+            style={{
+              display:
+                "inline-block",
+              textDecoration:
+                "none",
+              padding:
+                "12px 22px",
+              fontWeight: 600,
+            }}
+          >
+            ← Movies
+          </Link>
         </div>
       </section>
     </main>
