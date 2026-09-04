@@ -342,7 +342,7 @@ a {
   }
 
   .brand {
-    font-size: 27px;
+    font-size: 28px;
     letter-spacing: 0.08em;
     line-height: 1.05;
     word-break: break-word;
@@ -350,12 +350,12 @@ a {
 
   .subtitle {
     margin-top: 6px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   /*
-    History / Ticket / Festival：
-    单独返回按钮固定在右上角
+    History / Ticket / Festival
+    返回按钮固定在右上角
   */
 
   .header > a,
@@ -366,14 +366,13 @@ a {
     width: auto !important;
     max-width: 82px;
     padding: 8px 11px !important;
-    font-size: 9px !important;
+    font-size: 10px !important;
     line-height: 1.1;
     white-space: nowrap;
   }
 
   /*
-    首页三个入口按钮：
-    正常占位，不用绝对定位
+    首页三个入口按钮
   */
 
   .header > div:last-child:not(:first-child):has(a:nth-child(3)) {
@@ -392,14 +391,14 @@ a {
     align-items: center;
     justify-content: center;
     padding: 8px 4px !important;
-    font-size: 9px !important;
+    font-size: 10px !important;
     line-height: 1.1;
     white-space: nowrap;
     overflow: hidden;
   }
 
   /*
-    首页 Pick a Movie 区域
+    Pick a Movie 区域
   */
 
   .shell > div[style*="justify-content: space-between"] {
@@ -410,7 +409,7 @@ a {
   }
 
   .shell > div[style*="justify-content: space-between"] h2 {
-    font-size: 20px !important;
+    font-size: 21px !important;
     line-height: 1.1 !important;
   }
 
@@ -418,14 +417,14 @@ a {
     > div[style*="justify-content: space-between"]
     > div
     > div:first-child {
-    font-size: 9px !important;
+    font-size: 10px !important;
     letter-spacing: 1.8px !important;
     margin-bottom: 5px !important;
   }
 
   .shell > div[style*="justify-content: space-between"] .primary {
     padding: 9px 11px !important;
-    font-size: 9px !important;
+    font-size: 10px !important;
     white-space: nowrap;
   }
 
@@ -445,14 +444,14 @@ a {
   .movie-title {
     margin-top: 6px;
     padding: 0;
-    font-size: 9px;
+    font-size: 10px;
     line-height: 1.25;
   }
 
   .pick-button {
     margin-top: 5px;
     padding: 6px 3px;
-    font-size: 8px;
+    font-size: 9px;
     background: rgba(255, 255, 255, 0.02);
   }
 
@@ -532,19 +531,19 @@ a {
   }
 
   .brand {
-    font-size: 24px;
+    font-size: 25px;
     letter-spacing: 0.07em;
   }
 
   .subtitle {
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .header > a,
   .header > button {
     max-width: 72px;
     padding: 7px 9px !important;
-    font-size: 8px !important;
+    font-size: 9px !important;
   }
 
   .header > div:last-child:not(:first-child):has(a:nth-child(3)) {
@@ -553,16 +552,23 @@ a {
 
   .header > div:last-child:not(:first-child):has(a:nth-child(3)) a {
     padding: 7px 3px !important;
-    font-size: 8px !important;
+    font-size: 9px !important;
   }
 
   .shell > div[style*="justify-content: space-between"] h2 {
-    font-size: 18px !important;
+    font-size: 19px !important;
+  }
+
+  .shell
+    > div[style*="justify-content: space-between"]
+    > div
+    > div:first-child {
+    font-size: 9px !important;
   }
 
   .shell > div[style*="justify-content: space-between"] .primary {
     padding: 8px 9px !important;
-    font-size: 8px !important;
+    font-size: 9px !important;
   }
 
   .movie-grid {
@@ -575,11 +581,11 @@ a {
   }
 
   .movie-title {
-    font-size: 8px;
+    font-size: 9px;
   }
 
   .pick-button {
-    font-size: 8px;
+    font-size: 9px;
     padding: 6px 3px;
   }
 }
