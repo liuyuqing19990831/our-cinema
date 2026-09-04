@@ -321,67 +321,75 @@ a {
   .shell {
     width: 100%;
     padding:
-      20px
-      16px
-      calc(36px + env(safe-area-inset-bottom));
+      18px
+      14px
+      calc(34px + env(safe-area-inset-bottom));
   }
 
   .header {
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 16px;
-    margin-bottom: 24px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 22px;
+    position: relative;
   }
 
   .header > div:first-child {
-    width: 100%;
     min-width: 0;
+    flex: 1;
   }
 
   .brand {
-    font-size: 32px;
-    letter-spacing: 0.1em;
+    font-size: 28px;
+    letter-spacing: 0.09em;
     line-height: 1;
     word-break: break-word;
   }
 
   .subtitle {
-    margin-top: 7px;
-    font-size: 12px;
+    margin-top: 6px;
+    font-size: 11px;
   }
 
   /*
-    HISTORY / TICKET 等页面：
-    如果 header 右边是单独的返回按钮，
-    手机端让它单独落到标题下方
+    HISTORY / TICKET / FESTIVAL
+    单独返回按钮放右边
   */
 
   .header > a,
   .header > button {
-    align-self: flex-start;
+    flex-shrink: 0;
     width: auto !important;
-    max-width: 100%;
-    padding: 9px 14px !important;
-    font-size: 11px !important;
-    line-height: 1.2;
+    align-self: flex-start;
+    padding: 8px 12px !important;
+    font-size: 10px !important;
+    line-height: 1.15;
     white-space: nowrap;
   }
 
   /*
-    首页三个入口按钮：
+    首页三个入口按钮
     Tickets / History / Special Festival
+    放在标题下面
   */
 
-  .header > div:last-child:not(:first-child) {
+  .header > div:last-child:not(:first-child):has(a:nth-child(3)) {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 68px;
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px !important;
     width: 100%;
   }
 
-  .header > div:last-child:not(:first-child):has(a:nth-child(3)) {
-    display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 7px !important;
-    margin-top: 2px;
+  .header:has(
+    > div:last-child:not(:first-child):has(a:nth-child(3))
+  ) {
+    padding-bottom: 48px;
   }
 
   .header > div:last-child:not(:first-child):has(a:nth-child(3)) a {
@@ -390,31 +398,37 @@ a {
     display: inline-flex !important;
     align-items: center;
     justify-content: center;
-    padding: 9px 5px !important;
-    font-size: 10px !important;
-    line-height: 1.15;
+    padding: 8px 4px !important;
+    font-size: 9px !important;
+    line-height: 1.1;
     white-space: nowrap;
     overflow: hidden;
   }
 
+  /*
+    手机端电影一排三个
+  */
+
   .movie-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 24px 13px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px 8px;
   }
 
   .poster {
-    border-radius: 10px;
+    border-radius: 9px;
   }
 
   .movie-title {
-    margin-top: 9px;
-    font-size: 13px;
+    margin-top: 7px;
+    padding: 0 1px;
+    font-size: 10px;
+    line-height: 1.25;
   }
 
   .pick-button {
-    margin-top: 7px;
-    padding: 9px 8px;
-    font-size: 11px;
+    margin-top: 5px;
+    padding: 7px 4px;
+    font-size: 9px;
     background: rgba(255, 255, 255, 0.02);
   }
 
@@ -431,7 +445,7 @@ a {
 
   .primary,
   .secondary {
-    padding: 13px 15px;
+    padding: 12px 14px;
   }
 
   .modal-backdrop {
@@ -481,32 +495,56 @@ a {
 
 @media (max-width: 390px) {
   .shell {
-    padding-left: 13px;
-    padding-right: 13px;
+    padding-left: 11px;
+    padding-right: 11px;
   }
 
   .brand {
-    font-size: 29px;
+    font-size: 25px;
+    letter-spacing: 0.08em;
   }
 
-  .header > div:last-child:not(:first-child):has(a:nth-child(3)) {
-    gap: 6px !important;
+  .subtitle {
+    font-size: 10px;
   }
 
-  .header > div:last-child:not(:first-child):has(a:nth-child(3)) a {
-    padding: 8px 4px !important;
+  .header > a,
+  .header > button {
+    padding: 7px 10px !important;
     font-size: 9px !important;
   }
 
+  .header > div:last-child:not(:first-child):has(a:nth-child(3)) {
+    top: 64px;
+    gap: 5px !important;
+  }
+
+  .header > div:last-child:not(:first-child):has(a:nth-child(3)) a {
+    padding: 7px 3px !important;
+    font-size: 8px !important;
+  }
+
+  .header:has(
+    > div:last-child:not(:first-child):has(a:nth-child(3))
+  ) {
+    padding-bottom: 45px;
+  }
+
   .movie-grid {
-    gap: 22px 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px 6px;
+  }
+
+  .poster {
+    border-radius: 8px;
   }
 
   .movie-title {
-    font-size: 12px;
+    font-size: 9px;
   }
 
   .pick-button {
-    font-size: 10px;
+    font-size: 8px;
+    padding: 6px 3px;
   }
 }
