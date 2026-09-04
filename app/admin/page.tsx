@@ -778,12 +778,33 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <Link
-          href="/"
-          className="admin-link"
-        >
-          Guest View
-        </Link>
+       <div
+  style={{
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+  }}
+>
+  <Link
+    href="/admin/festival"
+    className="secondary"
+    style={{
+      textDecoration: "none",
+      padding: "10px 16px",
+      whiteSpace: "nowrap",
+    }}
+  >
+    🎞 Special Festival
+  </Link>
+
+  <Link
+    href="/"
+    className="admin-link"
+  >
+    Guest View
+  </Link>
+</div>
       </header>
 
       {/* CURRENT SCREENING */}
