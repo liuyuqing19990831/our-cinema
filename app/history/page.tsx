@@ -15,15 +15,30 @@ type Screening = {
   status: string;
   screening_date: string | null;
   screening_time: string | null;
+
   niu_rating: number | null;
   xia_rating: number | null;
   niu_rated_at: string | null;
   xia_rated_at: string | null;
+
+  festival_id: number | null;
 };
+
+type Festival = {
+  id: number;
+  title: string;
+};
+
+type HistoryItem =
+  Screening & {
+    festival_title:
+      | string
+      | null;
+  };
 
 export default function HistoryPage() {
   const [history, setHistory] =
-    useState<Screening[]>([]);
+    useState<HistoryItem[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -51,12 +66,18 @@ export default function HistoryPage() {
           "is",
           null
         )
-        .order("screening_date", {
-          ascending: false,
-        })
-        .order("screening_time", {
-          ascending: false,
-        });
+        .order(
+          "screening_date",
+          {
+            ascending: false,
+          }
+        )
+        .order(
+          "screening_time",
+          {
+            ascending: false,
+          }
+        );
 
     if (error) {
       console.error(error);
@@ -65,57 +86,186 @@ export default function HistoryPage() {
       return;
     }
 
-    const now = new Date();
+    const screenings =
+      (data ??
+        []) as Screening[];
+
+    const now =
+      new Date();
 
     const past =
-      (
-        (data ?? []) as Screening[]
-      ).filter((screening) => {
-        if (
-          !screening.screening_date ||
-          !screening.screening_time
-        ) {
-          return false;
-        }
+      screenings.filter(
+        (screening) => {
+          if (
+            !screening.screening_date ||
+            !screening.screening_time
+          ) {
+            return false;
+          }
 
-        const screeningDate =
-          new Date(
-            `${screening.screening_date}T${screening.screening_time}`
+          const screeningDate =
+            new Date(
+              `${screening.screening_date}T${screening.screening_time}`
+            );
+
+          return (
+            screeningDate <
+            now
           );
+        }
+      );
 
-        return screeningDate < now;
-      });
+    const festivalIds = [
+      ...new Set(
+        past
+          .map(
+            (item) =>
+              item.festival_id
+          )
+          .filter(
+            (
+              id
+            ): id is number =>
+              id !== null
+          )
+      ),
+    ];
 
-    setHistory(past);
+    let festivalMap:
+      Record<
+        number,
+        string
+      > = {};
+
+    if (
+      festivalIds.length >
+      0
+    ) {
+      const {
+        data:
+          festivalData,
+        error:
+          festivalError,
+      } = await supabase
+        .from("festivals")
+        .select(
+          "id, title"
+        )
+        .in(
+          "id",
+          festivalIds
+        );
+
+      if (
+        festivalError
+      ) {
+        console.error(
+          festivalError
+        );
+      } else {
+        festivalMap =
+          (
+            (festivalData ??
+              []) as Festival[]
+          ).reduce(
+            (
+              map,
+              festival
+            ) => {
+              map[
+                festival.id
+              ] =
+                festival.title;
+
+              return map;
+            },
+            {} as Record<
+              number,
+              string
+            >
+          );
+      }
+    }
+
+    const historyItems =
+      past.map(
+        (
+          screening
+        ): HistoryItem => ({
+          ...screening,
+
+          festival_title:
+            screening.festival_id
+              ? festivalMap[
+                  screening
+                    .festival_id
+                ] ?? null
+              : null,
+        })
+      );
+
+    setHistory(
+      historyItems
+    );
+
     setLoading(false);
   }
 
   useEffect(() => {
     loadHistory();
 
-    const channel = supabase
-      .channel("history-live")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "screenings",
-        },
-        () => loadHistory()
-      )
-      .subscribe();
+    const screeningChannel =
+      supabase
+        .channel(
+          "history-screenings-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table:
+              "screenings",
+          },
+          () =>
+            loadHistory()
+        )
+        .subscribe();
+
+    const festivalChannel =
+      supabase
+        .channel(
+          "history-festivals-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table:
+              "festivals",
+          },
+          () =>
+            loadHistory()
+        )
+        .subscribe();
 
     return () => {
       supabase.removeChannel(
-        channel
+        screeningChannel
+      );
+
+      supabase.removeChannel(
+        festivalChannel
       );
     };
   }, []);
 
   async function setRating(
-    screening: Screening,
-    person: "niu" | "xia",
+    screening: HistoryItem,
+    person:
+      | "niu"
+      | "xia",
     rating: number
   ) {
     const key =
@@ -138,6 +288,7 @@ export default function HistoryPage() {
         ? {
             niu_rating:
               nextRating,
+
             niu_rated_at:
               nextRating
                 ? new Date().toISOString()
@@ -146,6 +297,7 @@ export default function HistoryPage() {
         : {
             xia_rating:
               nextRating,
+
             xia_rated_at:
               nextRating
                 ? new Date().toISOString()
@@ -164,7 +316,9 @@ export default function HistoryPage() {
     setSaving(null);
 
     if (error) {
-      alert(error.message);
+      alert(
+        error.message
+      );
       return;
     }
 
@@ -172,7 +326,7 @@ export default function HistoryPage() {
   }
 
   async function deleteRecord(
-    screening: Screening
+    screening: HistoryItem
   ) {
     const confirmed =
       window.confirm(
@@ -187,6 +341,14 @@ export default function HistoryPage() {
       screening.id
     );
 
+    await supabase
+      .from("showtimes")
+      .delete()
+      .eq(
+        "screening_id",
+        screening.id
+      );
+
     const { error } =
       await supabase
         .from("screenings")
@@ -199,7 +361,9 @@ export default function HistoryPage() {
     setDeletingId(null);
 
     if (error) {
-      alert(error.message);
+      alert(
+        error.message
+      );
       return;
     }
 
@@ -212,10 +376,14 @@ export default function HistoryPage() {
     label,
     rating,
   }: {
-    screening: Screening;
-    person: "niu" | "xia";
+    screening: HistoryItem;
+    person:
+      | "niu"
+      | "xia";
     label: string;
-    rating: number | null;
+    rating:
+      | number
+      | null;
   }) {
     const key =
       `${screening.id}-${person}`;
@@ -223,7 +391,9 @@ export default function HistoryPage() {
     return (
       <div
         style={{
-          padding: "16px 0",
+          padding:
+            "16px 0",
+
           borderTop:
             "1px solid rgba(255,255,255,0.08)",
         }}
@@ -233,7 +403,8 @@ export default function HistoryPage() {
             display: "flex",
             justifyContent:
               "space-between",
-            alignItems: "center",
+            alignItems:
+              "center",
             gap: 12,
             marginBottom: 10,
           }}
@@ -285,14 +456,17 @@ export default function HistoryPage() {
                   background:
                     "transparent",
                   padding: 0,
-                  cursor: "pointer",
+                  cursor:
+                    "pointer",
                   fontSize: 29,
                   lineHeight: 1,
+
                   color:
                     rating &&
                     star <= rating
                       ? "inherit"
                       : "rgba(255,255,255,0.22)",
+
                   opacity:
                     saving === key
                       ? 0.5
@@ -323,7 +497,8 @@ export default function HistoryPage() {
       <header
         className="header"
         style={{
-          alignItems: "center",
+          alignItems:
+            "center",
           gap: 16,
         }}
       >
@@ -354,16 +529,18 @@ export default function HistoryPage() {
               "nowrap",
           }}
         >
-          ← Movies
+          ← Cinema
         </Link>
       </header>
 
-      {history.length === 0 ? (
+      {history.length ===
+      0 ? (
         <section
           className="admin-card"
           style={{
             textAlign:
               "center",
+
             padding:
               "56px 24px",
           }}
@@ -386,8 +563,7 @@ export default function HistoryPage() {
           </h2>
 
           <div className="status">
-            Finished screenings
-            will appear here automatically.
+            Finished screenings will appear here automatically.
           </div>
         </section>
       ) : (
@@ -413,9 +589,12 @@ export default function HistoryPage() {
                   style={{
                     display:
                       "grid",
+
                     gridTemplateColumns:
                       "130px 1fr",
+
                     gap: 24,
+
                     alignItems:
                       "start",
                   }}
@@ -429,10 +608,13 @@ export default function HistoryPage() {
                     }
                     style={{
                       width: 130,
+
                       aspectRatio:
                         "2 / 3",
+
                       objectFit:
                         "cover",
+
                       borderRadius: 13,
                     }}
                   />
@@ -440,20 +622,84 @@ export default function HistoryPage() {
                   <div>
                     <div
                       style={{
-                        fontSize: 11,
-                        letterSpacing: 2,
-                        opacity: 0.4,
-                        marginBottom: 7,
+                        display:
+                          "flex",
+
+                        alignItems:
+                          "center",
+
+                        gap: 8,
+
+                        flexWrap:
+                          "wrap",
+
+                        marginBottom: 10,
                       }}
                     >
-                      WATCHED
+                      <div
+                        style={{
+                          display:
+                            "inline-flex",
+
+                          alignItems:
+                            "center",
+
+                          border:
+                            screening.festival_id
+                              ? "1px solid rgba(239,229,209,0.28)"
+                              : "1px solid rgba(255,255,255,0.10)",
+
+                          borderRadius:
+                            999,
+
+                          padding:
+                            "5px 9px",
+
+                          fontSize: 9,
+
+                          letterSpacing:
+                            1.6,
+
+                          fontWeight: 700,
+
+                          opacity:
+                            screening.festival_id
+                              ? 0.9
+                              : 0.52,
+                        }}
+                      >
+                        {screening.festival_id
+                          ? "✦ SPECIAL FESTIVAL"
+                          : "OUR CINEMA"}
+                      </div>
                     </div>
+
+                    {screening.festival_title && (
+                      <div
+                        style={{
+                          fontSize: 13,
+
+                          opacity: 0.62,
+
+                          marginBottom: 8,
+
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {
+                          screening.festival_title
+                        }
+                      </div>
+                    )}
 
                     <div
                       style={{
                         fontSize: 25,
+
                         fontWeight: 650,
+
                         lineHeight: 1.15,
+
                         marginBottom: 9,
                       }}
                     >
@@ -465,7 +711,9 @@ export default function HistoryPage() {
                     <div
                       style={{
                         fontSize: 14,
+
                         opacity: 0.58,
+
                         marginBottom: 18,
                       }}
                     >
