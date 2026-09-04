@@ -19,6 +19,7 @@ type Screening = {
   screening_date: string | null;
   screening_time: string | null;
   watch_url: string | null;
+  watch_code: string | null;
 };
 
 type Showtime = {
@@ -49,19 +50,16 @@ export default function AdminPage() {
     useState<Showtime[]>([]);
 
   const [dateValues, setDateValues] =
-    useState<Record<number, string>>(
-      {}
-    );
+    useState<Record<number, string>>({});
 
   const [timeValues, setTimeValues] =
-    useState<Record<number, string>>(
-      {}
-    );
+    useState<Record<number, string>>({});
 
   const [watchValues, setWatchValues] =
-    useState<Record<number, string>>(
-      {}
-    );
+    useState<Record<number, string>>({});
+
+  const [codeValues, setCodeValues] =
+    useState<Record<number, string>>({});
 
   const [savingMovie, setSavingMovie] =
     useState(false);
@@ -72,8 +70,8 @@ export default function AdminPage() {
   ] = useState<number | null>(null);
 
   const [
-    savingWatchLink,
-    setSavingWatchLink,
+    savingWatchInfo,
+    setSavingWatchInfo,
   ] = useState<number | null>(null);
 
   async function loadMovies() {
@@ -119,6 +117,32 @@ export default function AdminPage() {
                 screening.id
               ] =
                 screening.watch_url ??
+                "";
+            }
+          }
+        );
+
+        return nextValues;
+      }
+    );
+
+    setCodeValues(
+      (currentValues) => {
+        const nextValues = {
+          ...currentValues,
+        };
+
+        items.forEach(
+          (screening) => {
+            if (
+              nextValues[
+                screening.id
+              ] === undefined
+            ) {
+              nextValues[
+                screening.id
+              ] =
+                screening.watch_code ??
                 "";
             }
           }
@@ -329,7 +353,6 @@ export default function AdminPage() {
     }
 
     setTitle("");
-
     pickFile(null);
 
     await loadMovies();
@@ -355,14 +378,13 @@ export default function AdminPage() {
 
     if (error) {
       alert(error.message);
-
       return;
     }
 
     await loadMovies();
   }
 
-  async function saveWatchUrl(
+  async function saveWatchInfo(
     screening: Screening
   ) {
     const watchUrl =
@@ -370,7 +392,12 @@ export default function AdminPage() {
         screening.id
       ]?.trim() || null;
 
-    setSavingWatchLink(
+    const watchCode =
+      codeValues[
+        screening.id
+      ]?.trim() || null;
+
+    setSavingWatchInfo(
       screening.id
     );
 
@@ -380,24 +407,23 @@ export default function AdminPage() {
         .update({
           watch_url:
             watchUrl,
+          watch_code:
+            watchCode,
         })
         .eq(
           "id",
           screening.id
         );
 
-    setSavingWatchLink(null);
+    setSavingWatchInfo(null);
 
     if (error) {
       alert(error.message);
-
       return;
     }
 
     alert(
-      watchUrl
-        ? "Watch link saved."
-        : "Watch link removed."
+      "Watch info saved."
     );
 
     await loadScreenings();
@@ -423,7 +449,6 @@ export default function AdminPage() {
       alert(
         "Please choose both date and time."
       );
-
       return;
     }
 
@@ -431,11 +456,13 @@ export default function AdminPage() {
       screening.id
     );
 
-    /*
-      Save latest watch link as well
-    */
     const watchUrl =
       watchValues[
+        screening.id
+      ]?.trim() || null;
+
+    const watchCode =
+      codeValues[
         screening.id
       ]?.trim() || null;
 
@@ -446,6 +473,8 @@ export default function AdminPage() {
       .update({
         watch_url:
           watchUrl,
+        watch_code:
+          watchCode,
       })
       .eq(
         "id",
@@ -480,7 +509,6 @@ export default function AdminPage() {
 
     if (error) {
       alert(error.message);
-
       return;
     }
 
@@ -513,7 +541,6 @@ export default function AdminPage() {
 
     if (error) {
       alert(error.message);
-
       return;
     }
 
@@ -546,7 +573,6 @@ export default function AdminPage() {
       alert(
         showtimeError.message
       );
-
       return;
     }
 
@@ -574,7 +600,6 @@ export default function AdminPage() {
       alert(
         screeningError.message
       );
-
       return;
     }
 
@@ -598,6 +623,142 @@ export default function AdminPage() {
         screening.status ===
         "scheduled"
     );
+
+  function WatchInfoEditor({
+    screening,
+  }: {
+    screening: Screening;
+  }) {
+    return (
+      <div
+        style={{
+          padding: 18,
+          border:
+            "1px solid rgba(255,255,255,0.09)",
+          borderRadius: 12,
+          background:
+            "rgba(255,255,255,0.025)",
+        }}
+      >
+        <div
+          style={{
+            fontSize: 11,
+            letterSpacing: 1.8,
+            opacity: 0.5,
+            marginBottom: 14,
+          }}
+        >
+          WATCH INFO
+        </div>
+
+        <label
+          className="label"
+          style={{
+            display: "block",
+            marginBottom: 8,
+          }}
+        >
+          Watch Link
+        </label>
+
+        <input
+          className="text-input"
+          type="url"
+          value={
+            watchValues[
+              screening.id
+            ] ?? ""
+          }
+          onChange={(e) =>
+            setWatchValues({
+              ...watchValues,
+              [screening.id]:
+                e.target.value,
+            })
+          }
+          placeholder="Baidu, Drive, YouTube, Vimeo..."
+          style={{
+            width: "100%",
+            boxSizing:
+              "border-box",
+            marginBottom: 14,
+          }}
+        />
+
+        <label
+          className="label"
+          style={{
+            display: "block",
+            marginBottom: 8,
+          }}
+        >
+          Access Code
+        </label>
+
+        <input
+          className="text-input"
+          type="text"
+          value={
+            codeValues[
+              screening.id
+            ] ?? ""
+          }
+          onChange={(e) =>
+            setCodeValues({
+              ...codeValues,
+              [screening.id]:
+                e.target.value,
+            })
+          }
+          placeholder="e.g. 8X3A"
+          style={{
+            width: "100%",
+            boxSizing:
+              "border-box",
+            marginBottom: 12,
+            textTransform:
+              "none",
+          }}
+        />
+
+        <div
+          style={{
+            fontSize: 11,
+            opacity: 0.45,
+            lineHeight: 1.5,
+            marginBottom: 12,
+          }}
+        >
+          Optional. The access code
+          will appear on the movie
+          ticket.
+        </div>
+
+        <button
+          className="secondary"
+          onClick={() =>
+            saveWatchInfo(
+              screening
+            )
+          }
+          disabled={
+            savingWatchInfo ===
+            screening.id
+          }
+          style={{
+            width: "100%",
+            padding:
+              "11px 15px",
+          }}
+        >
+          {savingWatchInfo ===
+          screening.id
+            ? "Saving…"
+            : "Save Watch Info"}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <main className="shell">
@@ -678,7 +839,7 @@ export default function AdminPage() {
                     gap: 20,
                     alignItems:
                       "start",
-                    marginBottom: 24,
+                    marginBottom: 22,
                   }}
                 >
                   <img
@@ -729,77 +890,16 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* EDIT CURRENT TICKET LINK */}
-
                 <div
                   style={{
-                    padding: 18,
-                    border:
-                      "1px solid rgba(255,255,255,0.09)",
-                    borderRadius: 12,
-                    background:
-                      "rgba(255,255,255,0.025)",
                     marginBottom: 18,
                   }}
                 >
-                  <div
-                    style={{
-                      fontSize: 11,
-                      letterSpacing: 1.8,
-                      opacity: 0.5,
-                      marginBottom: 10,
-                    }}
-                  >
-                    WATCH LINK
-                  </div>
-
-                  <input
-                    className="text-input"
-                    type="url"
-                    value={
-                      watchValues[
-                        screening.id
-                      ] ?? ""
+                  <WatchInfoEditor
+                    screening={
+                      screening
                     }
-                    onChange={(e) =>
-                      setWatchValues({
-                        ...watchValues,
-                        [screening.id]:
-                          e.target
-                            .value,
-                      })
-                    }
-                    placeholder="Paste Baidu, Drive, YouTube, Vimeo..."
-                    style={{
-                      width: "100%",
-                      boxSizing:
-                        "border-box",
-                      marginBottom: 10,
-                    }}
                   />
-
-                  <button
-                    className="primary"
-                    onClick={() =>
-                      saveWatchUrl(
-                        screening
-                      )
-                    }
-                    disabled={
-                      savingWatchLink ===
-                      screening.id
-                    }
-                    style={{
-                      width: "100%",
-                      padding:
-                        "12px 16px",
-                    }}
-                  >
-                    {savingWatchLink ===
-                    screening.id
-                      ? "Saving…"
-                      : "Save Watch Link"}
-                  </button>
                 </div>
 
                 <div
@@ -897,8 +997,6 @@ export default function AdminPage() {
                     marginBottom: 20,
                   }}
                 >
-                  {/* MOVIE */}
-
                   <div
                     style={{
                       display:
@@ -965,8 +1063,6 @@ export default function AdminPage() {
                       </div>
                     </div>
                   </div>
-
-                  {/* DATE + TIME */}
 
                   <div
                     style={{
@@ -1050,80 +1146,17 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  {/* WATCH LINK */}
-
                   <div
                     style={{
-                      padding: 18,
-                      border:
-                        "1px solid rgba(255,255,255,0.09)",
-                      borderRadius: 12,
-                      background:
-                        "rgba(255,255,255,0.025)",
                       marginBottom: 18,
                     }}
                   >
-                    <label
-                      className="label"
-                      style={{
-                        display:
-                          "block",
-                        marginBottom: 8,
-                      }}
-                    >
-                      Watch Link
-                    </label>
-
-                    <input
-                      className="text-input"
-                      type="url"
-                      value={
-                        watchValues[
-                          screening.id
-                        ] ?? ""
+                    <WatchInfoEditor
+                      screening={
+                        screening
                       }
-                      onChange={(e) =>
-                        setWatchValues({
-                          ...watchValues,
-                          [screening.id]:
-                            e.target
-                              .value,
-                        })
-                      }
-                      placeholder="Baidu, Google Drive, YouTube, Vimeo..."
-                      style={{
-                        width: "100%",
-                        boxSizing:
-                          "border-box",
-                        marginBottom: 10,
-                      }}
                     />
-
-                    <button
-                      className="secondary"
-                      onClick={() =>
-                        saveWatchUrl(
-                          screening
-                        )
-                      }
-                      disabled={
-                        savingWatchLink ===
-                        screening.id
-                      }
-                      style={{
-                        width: "100%",
-                        padding:
-                          "11px 15px",
-                      }}
-                    >
-                      {savingWatchLink ===
-                      screening.id
-                        ? "Saving…"
-                        : "Save Watch Link"}
-                    </button>
                   </div>
-
-                  {/* ADD SHOWTIME */}
 
                   <button
                     className="primary"
@@ -1150,8 +1183,6 @@ export default function AdminPage() {
                       ? "Adding…"
                       : "+ Add Showtime"}
                   </button>
-
-                  {/* OFFERED TIMES */}
 
                   {currentShowtimes.length >
                     0 && (
