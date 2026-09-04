@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   useEffect,
   useState,
@@ -208,7 +207,7 @@ export default function TicketPage() {
           </div>
         </div>
 
-        <Link
+        <a
           href="/"
           className="primary"
           style={{
@@ -227,7 +226,7 @@ export default function TicketPage() {
           }}
         >
           ← Movies
-        </Link>
+        </a>
       </header>
     );
   }
@@ -288,7 +287,7 @@ export default function TicketPage() {
             you choose showtimes.
           </div>
 
-          <Link
+          <a
             href="/"
             className="primary"
             style={{
@@ -303,7 +302,7 @@ export default function TicketPage() {
             }}
           >
             ← Browse Movies
-          </Link>
+          </a>
         </section>
       </main>
     );
@@ -539,7 +538,7 @@ export default function TicketPage() {
           textAlign: "center",
         }}
       >
-        <Link
+        <a
           href="/"
           className="secondary"
           style={{
@@ -552,7 +551,7 @@ export default function TicketPage() {
           }}
         >
           ← Movies
-        </Link>
+        </a>
       </div>
     </main>
   );
