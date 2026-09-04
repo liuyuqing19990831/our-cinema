@@ -17,6 +17,7 @@ type Screening = {
   screening_date: string | null;
   screening_time: string | null;
   watch_url: string | null;
+  watch_code: string | null;
 };
 
 export default function TicketPage() {
@@ -28,6 +29,9 @@ export default function TicketPage() {
   const [loading, setLoading] =
     useState(true);
 
+  const [copied, setCopied] =
+    useState(false);
+
   async function loadTicket() {
     setLoading(true);
 
@@ -35,10 +39,6 @@ export default function TicketPage() {
       await supabase
         .from("screenings")
         .select("*")
-        .eq(
-          "status",
-          "scheduled"
-        )
         .order("created_at", {
           ascending: false,
         })
@@ -51,10 +51,16 @@ export default function TicketPage() {
       return;
     }
 
-    setTicket(
+    const latest =
       data &&
-        data.length > 0
+      data.length > 0
         ? (data[0] as Screening)
+        : null;
+
+    setTicket(
+      latest?.status ===
+        "scheduled"
+        ? latest
         : null
     );
 
@@ -123,6 +129,30 @@ export default function TicketPage() {
     );
   }
 
+  async function copyCode() {
+    if (
+      !ticket?.watch_code
+    ) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(
+        ticket.watch_code
+      );
+
+      setCopied(true);
+
+      setTimeout(() => {
+        setCopied(false);
+      }, 1800);
+    } catch {
+      alert(
+        `Access Code: ${ticket.watch_code}`
+      );
+    }
+  }
+
   function Header() {
     return (
       <header
@@ -175,9 +205,6 @@ export default function TicketPage() {
     );
   }
 
-  /*
-    NO TICKET
-  */
   if (!ticket) {
     return (
       <main className="shell">
@@ -244,9 +271,6 @@ export default function TicketPage() {
     );
   }
 
-  /*
-    TICKET EXISTS
-  */
   return (
     <main className="shell">
       <Header />
@@ -327,7 +351,7 @@ export default function TicketPage() {
         <div
           style={{
             marginTop: 30,
-            paddingTop: 20,
+            paddingTop: 22,
             borderTop:
               "1px dashed rgba(255,255,255,0.25)",
           }}
@@ -352,24 +376,97 @@ export default function TicketPage() {
                   "15px 20px",
                 fontSize: 16,
                 fontWeight: 650,
-                marginBottom: 22,
+                marginBottom:
+                  ticket.watch_code
+                    ? 14
+                    : 24,
               }}
             >
               ▶ Watch Movie
             </a>
           )}
 
-          {!ticket.watch_url && (
+          {ticket.watch_code && (
             <div
               style={{
-                fontSize: 12,
-                opacity: 0.45,
-                marginBottom: 22,
+                padding:
+                  "16px 18px",
+                border:
+                  "1px solid rgba(255,255,255,0.10)",
+                borderRadius: 12,
+                background:
+                  "rgba(255,255,255,0.025)",
+                marginBottom: 24,
+                textAlign: "left",
               }}
             >
-              Watch link not added yet.
+              <div
+                style={{
+                  fontSize: 10,
+                  letterSpacing: 2,
+                  opacity: 0.45,
+                  marginBottom: 9,
+                }}
+              >
+                ACCESS CODE
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent:
+                    "space-between",
+                  alignItems:
+                    "center",
+                  gap: 12,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 22,
+                    fontWeight: 700,
+                    letterSpacing: 2,
+                    wordBreak:
+                      "break-all",
+                  }}
+                >
+                  {
+                    ticket.watch_code
+                  }
+                </div>
+
+                <button
+                  className="secondary"
+                  onClick={
+                    copyCode
+                  }
+                  style={{
+                    flexShrink: 0,
+                    padding:
+                      "9px 13px",
+                    fontSize: 12,
+                  }}
+                >
+                  {copied
+                    ? "Copied ✓"
+                    : "Copy"}
+                </button>
+              </div>
             </div>
           )}
+
+          {!ticket.watch_url &&
+            !ticket.watch_code && (
+              <div
+                style={{
+                  fontSize: 12,
+                  opacity: 0.45,
+                  marginBottom: 24,
+                }}
+              >
+                Watch info not added yet.
+              </div>
+            )}
 
           <div
             style={{
