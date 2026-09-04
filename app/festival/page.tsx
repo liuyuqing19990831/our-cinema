@@ -52,7 +52,7 @@ export default function FestivalPage() {
     setLoading(true);
 
     /*
-      FIND ACTIVE FESTIVAL
+      FIND FESTIVAL MARKED ACTIVE
     */
     const {
       data: festivalData,
@@ -83,14 +83,38 @@ export default function FestivalPage() {
         ? (festivalData[0] as Festival)
         : null;
 
+    /*
+      CHECK DATE RANGE
+
+      Festival only appears when:
+      start_date <= today <= end_date
+    */
+
+    const today =
+      new Date().toLocaleDateString(
+        "en-CA"
+      );
+
+    const visibleFestival =
+      activeFestival &&
+      activeFestival.start_date <= today &&
+      activeFestival.end_date >= today
+        ? activeFestival
+        : null;
+
     setFestival(
-      activeFestival
+      visibleFestival
     );
 
     /*
-      NO FESTIVAL
+      NO CURRENT FESTIVAL
+
+      This covers:
+      - no active festival
+      - festival hasn't started yet
+      - festival has already ended
     */
-    if (!activeFestival) {
+    if (!visibleFestival) {
       setMovies([]);
       setLoading(false);
       return;
@@ -98,7 +122,7 @@ export default function FestivalPage() {
 
     /*
       LOAD ALL MOVIES
-      IN THIS FESTIVAL
+      IN CURRENT FESTIVAL
     */
     const {
       data: movieData,
@@ -108,7 +132,7 @@ export default function FestivalPage() {
       .select("*")
       .eq(
         "festival_id",
-        activeFestival.id
+        visibleFestival.id
       )
       .order("created_at", {
         ascending: true,
@@ -171,6 +195,19 @@ export default function FestivalPage() {
         )
         .subscribe();
 
+    /*
+      DATE CAN CHANGE WHILE PAGE
+      STAYS OPEN, SO CHECK AGAIN
+      EVERY MINUTE
+    */
+    const timer =
+      window.setInterval(
+        () => {
+          loadFestival();
+        },
+        60 * 1000
+      );
+
     return () => {
       supabase.removeChannel(
         festivalChannel
@@ -178,6 +215,10 @@ export default function FestivalPage() {
 
       supabase.removeChannel(
         movieChannel
+      );
+
+      window.clearInterval(
+        timer
       );
     };
   }, []);
@@ -207,24 +248,50 @@ export default function FestivalPage() {
       return;
     }
 
+    /*
+      SAFETY CHECK:
+      don't allow choosing
+      after festival expires
+    */
+    const today =
+      new Date().toLocaleDateString(
+        "en-CA"
+      );
+
+    if (
+      festival.start_date > today ||
+      festival.end_date < today
+    ) {
+      alert(
+        "This festival is no longer available."
+      );
+
+      await loadFestival();
+
+      return;
+    }
+
     setWorking(true);
 
     /*
-      CREATE A NORMAL SCREENING,
-      BUT RECORD WHICH FESTIVAL
-      IT CAME FROM
+      CREATE SCREENING
+      AND REMEMBER FESTIVAL ID
     */
     const { error } =
       await supabase
         .from("screenings")
         .insert({
           movie_id: null,
+
           movie_title:
             movie.title,
+
           poster_url:
             movie.poster_url,
+
           status:
             "waiting_schedule",
+
           festival_id:
             festival.id,
         });
@@ -239,11 +306,8 @@ export default function FestivalPage() {
     setChosenMovie(null);
 
     /*
-      GO BACK TO THE NORMAL
-      CINEMA FLOW.
-
-      Existing scheduling system
-      will now handle this screening.
+      GO BACK TO NORMAL
+      CINEMA SCHEDULING FLOW
     */
     router.push("/");
   }
@@ -298,8 +362,9 @@ export default function FestivalPage() {
   }
 
   /*
-    NO ACTIVE FESTIVAL
+    NO FESTIVAL CURRENTLY AVAILABLE
   */
+
   if (!festival) {
     return (
       <main className="shell">
@@ -327,8 +392,10 @@ export default function FestivalPage() {
             style={{
               textDecoration:
                 "none",
+
               padding:
                 "11px 18px",
+
               whiteSpace:
                 "nowrap",
             }}
@@ -341,15 +408,21 @@ export default function FestivalPage() {
           className="admin-card"
           style={{
             minHeight: 320,
+
             display: "flex",
+
             flexDirection:
               "column",
+
             alignItems:
               "center",
+
             justifyContent:
               "center",
+
             textAlign:
               "center",
+
             padding:
               "50px 26px",
           }}
@@ -366,8 +439,11 @@ export default function FestivalPage() {
           <div
             style={{
               fontSize: 11,
+
               letterSpacing: 3,
+
               opacity: 0.4,
+
               marginBottom: 14,
             }}
           >
@@ -377,6 +453,7 @@ export default function FestivalPage() {
           <h2
             style={{
               fontSize: 28,
+
               marginBottom: 12,
             }}
           >
@@ -386,7 +463,9 @@ export default function FestivalPage() {
           <div
             style={{
               opacity: 0.5,
+
               fontSize: 14,
+
               lineHeight: 1.7,
             }}
           >
@@ -400,8 +479,9 @@ export default function FestivalPage() {
   }
 
   /*
-    ACTIVE FESTIVAL
+    ACTIVE + IN-DATE FESTIVAL
   */
+
   return (
     <main className="shell">
       <header
@@ -428,8 +508,10 @@ export default function FestivalPage() {
           style={{
             textDecoration:
               "none",
+
             padding:
               "11px 18px",
+
             whiteSpace:
               "nowrap",
           }}
@@ -444,17 +526,23 @@ export default function FestivalPage() {
       <section
         className="admin-card"
         style={{
-          textAlign: "center",
+          textAlign:
+            "center",
+
           padding:
             "44px 24px",
+
           marginBottom: 28,
         }}
       >
         <div
           style={{
             fontSize: 11,
+
             letterSpacing: 3,
+
             opacity: 0.4,
+
             marginBottom: 18,
           }}
         >
@@ -465,7 +553,9 @@ export default function FestivalPage() {
           style={{
             fontSize:
               "clamp(30px, 6vw, 52px)",
+
             lineHeight: 1.05,
+
             marginBottom: 18,
           }}
         >
@@ -475,7 +565,9 @@ export default function FestivalPage() {
         <div
           style={{
             fontSize: 15,
+
             opacity: 0.65,
+
             letterSpacing: 0.4,
           }}
         >
@@ -498,6 +590,7 @@ export default function FestivalPage() {
           style={{
             textAlign:
               "center",
+
             padding:
               "48px 24px",
           }}
@@ -507,8 +600,7 @@ export default function FestivalPage() {
               opacity: 0.5,
             }}
           >
-            Festival films
-            coming soon.
+            Festival films coming soon.
           </div>
         </section>
       ) : (
@@ -516,11 +608,15 @@ export default function FestivalPage() {
           <div
             style={{
               display: "flex",
+
               justifyContent:
                 "space-between",
+
               alignItems:
                 "center",
+
               gap: 16,
+
               marginBottom: 18,
             }}
           >
@@ -528,8 +624,11 @@ export default function FestivalPage() {
               <div
                 style={{
                   fontSize: 11,
+
                   letterSpacing: 2,
+
                   opacity: 0.4,
+
                   marginBottom: 5,
                 }}
               >
@@ -539,12 +638,12 @@ export default function FestivalPage() {
               <div
                 style={{
                   fontSize: 20,
+
                   fontWeight: 650,
                 }}
               >
                 {movies.length}{" "}
-                {movies.length ===
-                1
+                {movies.length === 1
                   ? "Film"
                   : "Films"}
               </div>
@@ -558,6 +657,7 @@ export default function FestivalPage() {
               style={{
                 padding:
                   "12px 18px",
+
                 whiteSpace:
                   "nowrap",
               }}
@@ -570,7 +670,9 @@ export default function FestivalPage() {
             {movies.map(
               (movie) => (
                 <article
-                  key={movie.id}
+                  key={
+                    movie.id
+                  }
                 >
                   <img
                     className="poster"
@@ -612,7 +714,9 @@ export default function FestivalPage() {
         <div
           className="modal-backdrop"
           onClick={() =>
-            setChosenMovie(null)
+            setChosenMovie(
+              null
+            )
           }
         >
           <div
@@ -633,8 +737,11 @@ export default function FestivalPage() {
             <div
               style={{
                 fontSize: 10,
+
                 letterSpacing: 2,
+
                 opacity: 0.4,
+
                 marginTop: 15,
               }}
             >
