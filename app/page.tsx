@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Movie } from "@/types/movie";
 
@@ -25,62 +25,65 @@ type Showtime = {
   status: string;
 };
 
-export default function AdminPage() {
-  const [title, setTitle] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState("");
-
+export default function HomePage() {
   const [movies, setMovies] = useState<Movie[]>([]);
-  const [screenings, setScreenings] = useState<Screening[]>([]);
+  const [screening, setScreening] = useState<Screening | null>(null);
   const [showtimes, setShowtimes] = useState<Showtime[]>([]);
 
-  const [dateValues, setDateValues] = useState<Record<number, string>>({});
-  const [timeValues, setTimeValues] = useState<Record<number, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [chosenMovie, setChosenMovie] = useState<Movie | null>(null);
+  const [chosenShowtime, setChosenShowtime] =
+    useState<Showtime | null>(null);
 
-  const [savingMovie, setSavingMovie] = useState(false);
-  const [savingShowtime, setSavingShowtime] = useState<number | null>(null);
+  const [working, setWorking] = useState(false);
 
-  async function loadMovies() {
-    const { data } = await supabase
+  async function loadData() {
+    setLoading(true);
+
+    const { data: movieData } = await supabase
       .from("movies")
       .select("*")
+      .eq("status", "available")
       .order("created_at", { ascending: true });
 
-    setMovies((data ?? []) as Movie[]);
-  }
+    setMovies((movieData ?? []) as Movie[]);
 
-  async function loadScreenings() {
-    const { data } = await supabase
+    const { data: screeningData } = await supabase
       .from("screenings")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(1);
 
-    setScreenings((data ?? []) as Screening[]);
-  }
+    const latestScreening =
+      screeningData && screeningData.length > 0
+        ? (screeningData[0] as Screening)
+        : null;
 
-  async function loadShowtimes() {
-    const { data } = await supabase
-      .from("showtimes")
-      .select("*")
-      .order("screening_date", { ascending: true })
-      .order("screening_time", { ascending: true });
+    setScreening(latestScreening);
 
-    setShowtimes((data ?? []) as Showtime[]);
-  }
+    if (latestScreening) {
+      const { data: showtimeData } = await supabase
+        .from("showtimes")
+        .select("*")
+        .eq("screening_id", latestScreening.id)
+        .order("screening_date", { ascending: true })
+        .order("screening_time", { ascending: true });
 
-  async function loadAll() {
-    await Promise.all([
-      loadMovies(),
-      loadScreenings(),
-      loadShowtimes(),
-    ]);
+      setShowtimes(
+        (showtimeData ?? []) as Showtime[]
+      );
+    } else {
+      setShowtimes([]);
+    }
+
+    setLoading(false);
   }
 
   useEffect(() => {
-    loadAll();
+    loadData();
 
     const movieChannel = supabase
-      .channel("admin-movies-live")
+      .channel("guest-movies-live")
       .on(
         "postgres_changes",
         {
@@ -88,12 +91,12 @@ export default function AdminPage() {
           schema: "public",
           table: "movies",
         },
-        loadMovies
+        loadData
       )
       .subscribe();
 
     const screeningChannel = supabase
-      .channel("admin-screenings-live")
+      .channel("guest-screenings-live")
       .on(
         "postgres_changes",
         {
@@ -101,12 +104,12 @@ export default function AdminPage() {
           schema: "public",
           table: "screenings",
         },
-        loadScreenings
+        loadData
       )
       .subscribe();
 
     const showtimeChannel = supabase
-      .channel("admin-showtimes-live")
+      .channel("guest-showtimes-live")
       .on(
         "postgres_changes",
         {
@@ -114,7 +117,7 @@ export default function AdminPage() {
           schema: "public",
           table: "showtimes",
         },
-        loadShowtimes
+        loadData
       )
       .subscribe();
 
@@ -125,454 +128,522 @@ export default function AdminPage() {
     };
   }, []);
 
-  function pickFile(f: File | null) {
-    setFile(f);
+  function randomPick() {
+    if (!movies.length) return;
 
-    if (preview) {
-      URL.revokeObjectURL(preview);
-    }
-
-    setPreview(f ? URL.createObjectURL(f) : "");
+    setChosenMovie(
+      movies[
+        Math.floor(
+          Math.random() * movies.length
+        )
+      ]
+    );
   }
 
-  async function submitMovie(e: FormEvent) {
-    e.preventDefault();
+  async function confirmMovie(movie: Movie) {
+    setWorking(true);
 
-    if (!title.trim() || !file) {
-      alert("Please add a poster and title.");
+    const { error: screeningError } =
+      await supabase
+        .from("screenings")
+        .insert({
+          movie_id: movie.id,
+          movie_title: movie.title,
+          poster_url: movie.poster_url,
+          status: "waiting_schedule",
+        });
+
+    if (screeningError) {
+      setWorking(false);
+      alert(screeningError.message);
       return;
     }
 
-    const availableCount = movies.filter(
-      (movie) => movie.status === "available"
-    ).length;
+    const { error: movieError } =
+      await supabase
+        .from("movies")
+        .update({
+          status: "selected",
+        })
+        .eq("id", movie.id)
+        .eq("status", "available");
 
-    if (availableCount >= 9) {
-      alert("The movie pool already has 9 available movies.");
+    setWorking(false);
+
+    if (movieError) {
+      alert(movieError.message);
       return;
     }
 
-    setSavingMovie(true);
-
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}.${ext}`;
-
-    const upload = await supabase.storage
-      .from("posters")
-      .upload(path, file, {
-        upsert: false,
-        contentType: file.type || "image/jpeg",
-      });
-
-    if (upload.error) {
-      setSavingMovie(false);
-      alert(upload.error.message);
-      return;
-    }
-
-    const { data: urlData } = supabase.storage
-      .from("posters")
-      .getPublicUrl(path);
-
-    const insert = await supabase
-      .from("movies")
-      .insert({
-        title: title.trim(),
-        poster_url: urlData.publicUrl,
-        status: "available",
-      });
-
-    setSavingMovie(false);
-
-    if (insert.error) {
-      alert(insert.error.message);
-      return;
-    }
-
-    setTitle("");
-    pickFile(null);
-    await loadMovies();
+    setChosenMovie(null);
+    await loadData();
   }
 
-  async function removeMovie(movie: Movie) {
-    if (!confirm(`Delete "${movie.title}"?`)) {
+  async function confirmShowtime(
+    showtime: Showtime
+  ) {
+    if (!screening) return;
+
+    setWorking(true);
+
+    const { error: showtimeError } =
+      await supabase
+        .from("showtimes")
+        .update({
+          status: "selected",
+        })
+        .eq("id", showtime.id)
+        .eq("status", "available");
+
+    if (showtimeError) {
+      setWorking(false);
+      alert(showtimeError.message);
       return;
     }
 
-    const { error } = await supabase
-      .from("movies")
-      .delete()
-      .eq("id", movie.id);
+    const { error: screeningError } =
+      await supabase
+        .from("screenings")
+        .update({
+          status: "scheduled",
+          screening_date:
+            showtime.screening_date,
+          screening_time:
+            showtime.screening_time,
+        })
+        .eq("id", screening.id);
 
-    if (error) {
-      alert(error.message);
+    setWorking(false);
+
+    if (screeningError) {
+      alert(screeningError.message);
       return;
     }
 
-    await loadMovies();
+    setChosenShowtime(null);
+    await loadData();
   }
 
-  async function addShowtime(screening: Screening) {
-    const date = dateValues[screening.id];
-    const time = timeValues[screening.id];
+  function formatDate(date: string) {
+    const parts = date.split("-");
 
-    if (!date || !time) {
-      alert("Please choose both date and time.");
-      return;
+    if (parts.length !== 3) {
+      return date;
     }
 
-    setSavingShowtime(screening.id);
+    const year = Number(parts[0]);
+    const month = Number(parts[1]);
+    const day = Number(parts[2]);
 
-    const { error } = await supabase
-      .from("showtimes")
-      .insert({
-        screening_id: screening.id,
-        screening_date: date,
-        screening_time: time,
-        status: "available",
-      });
-
-    setSavingShowtime(null);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    setDateValues({
-      ...dateValues,
-      [screening.id]: "",
-    });
-
-    setTimeValues({
-      ...timeValues,
-      [screening.id]: "",
-    });
-
-    await loadShowtimes();
+    return new Intl.DateTimeFormat(
+      "en-US",
+      {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }
+    ).format(
+      new Date(
+        Date.UTC(year, month - 1, day)
+      )
+    );
   }
 
-  async function deleteShowtime(showtime: Showtime) {
-    const { error } = await supabase
-      .from("showtimes")
-      .delete()
-      .eq("id", showtime.id);
+  const availableShowtimes =
+    showtimes.filter(
+      (showtime) =>
+        showtime.status === "available"
+    );
 
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    await loadShowtimes();
+  if (loading) {
+    return (
+      <main className="shell">
+        <div className="empty">
+          Loading…
+        </div>
+      </main>
+    );
   }
 
-  const waitingScreenings = screenings.filter(
-    (screening) => screening.status === "waiting_schedule"
-  );
+  /*
+    STATE 1
+    Final ticket
+  */
+  if (
+    screening &&
+    screening.status === "scheduled"
+  ) {
+    return (
+      <main className="shell">
+        <header className="header">
+          <div>
+            <h1 className="brand">
+              OUR CINEMA
+            </h1>
+            <div className="subtitle">
+              Your Movie Ticket
+            </div>
+          </div>
 
+          <Link
+            href="/admin"
+            className="admin-link"
+          >
+            Admin
+          </Link>
+        </header>
+
+        <section
+          className="admin-card"
+          style={{
+            textAlign: "center",
+            padding: 28,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 12,
+              letterSpacing: 3,
+              opacity: 0.65,
+              marginBottom: 18,
+            }}
+          >
+            ADMIT TWO
+          </div>
+
+          <img
+            src={screening.poster_url}
+            alt={screening.movie_title}
+            style={{
+              width: "min(220px, 70%)",
+              borderRadius: 10,
+              marginBottom: 22,
+            }}
+          />
+
+          <h2
+            style={{
+              fontSize: 28,
+              marginBottom: 20,
+            }}
+          >
+            {screening.movie_title}
+          </h2>
+
+          <div
+            style={{
+              fontSize: 18,
+              marginBottom: 8,
+            }}
+          >
+            {screening.screening_date
+              ? formatDate(
+                  screening.screening_date
+                )
+              : ""}
+          </div>
+
+          <div
+            style={{
+              fontSize: 32,
+              fontWeight: 700,
+              letterSpacing: 2,
+            }}
+          >
+            {screening.screening_time?.slice(
+              0,
+              5
+            )}
+          </div>
+
+          <div
+            style={{
+              marginTop: 28,
+              paddingTop: 20,
+              borderTop:
+                "1px dashed rgba(255,255,255,0.25)",
+              fontSize: 13,
+              letterSpacing: 2,
+              opacity: 0.65,
+            }}
+          >
+            OUR CINEMA · TWO SEATS
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  /*
+    STATE 2
+    Movie selected, choose showtime
+  */
+  if (screening) {
+    return (
+      <main className="shell">
+        <header className="header">
+          <div>
+            <h1 className="brand">
+              OUR CINEMA
+            </h1>
+
+            <div className="subtitle">
+              Choose a Showtime
+            </div>
+          </div>
+
+          <Link
+            href="/admin"
+            className="admin-link"
+          >
+            Admin
+          </Link>
+        </header>
+
+        <section
+          className="admin-card"
+          style={{
+            textAlign: "center",
+          }}
+        >
+          <img
+            src={screening.poster_url}
+            alt={screening.movie_title}
+            style={{
+              width: 150,
+              borderRadius: 8,
+              marginBottom: 16,
+            }}
+          />
+
+          <h2>
+            {screening.movie_title}
+          </h2>
+
+          {availableShowtimes.length ===
+          0 ? (
+            <div
+              className="status"
+              style={{
+                marginTop: 20,
+              }}
+            >
+              Waiting for showtimes…
+            </div>
+          ) : (
+            <div
+              style={{
+                marginTop: 24,
+                display: "grid",
+                gap: 12,
+              }}
+            >
+              {availableShowtimes.map(
+                (showtime) => (
+                  <button
+                    key={showtime.id}
+                    className="secondary"
+                    style={{
+                      padding: 16,
+                      fontSize: 16,
+                    }}
+                    onClick={() =>
+                      setChosenShowtime(
+                        showtime
+                      )
+                    }
+                  >
+                    {formatDate(
+                      showtime.screening_date
+                    )}
+                    {" · "}
+                    {showtime.screening_time.slice(
+                      0,
+                      5
+                    )}
+                  </button>
+                )
+              )}
+            </div>
+          )}
+        </section>
+
+        {chosenShowtime && (
+          <div
+            className="modal-backdrop"
+            onClick={() =>
+              setChosenShowtime(null)
+            }
+          >
+            <div
+              className="modal"
+              onClick={(e) =>
+                e.stopPropagation()
+              }
+            >
+              <h3>
+                Confirm Showtime
+              </h3>
+
+              <p>
+                {formatDate(
+                  chosenShowtime.screening_date
+                )}
+                {" · "}
+                {chosenShowtime.screening_time.slice(
+                  0,
+                  5
+                )}
+              </p>
+
+              <div className="modal-actions">
+                <button
+                  className="primary"
+                  disabled={working}
+                  onClick={() =>
+                    confirmShowtime(
+                      chosenShowtime
+                    )
+                  }
+                >
+                  {working
+                    ? "Confirming…"
+                    : "Confirm"}
+                </button>
+
+                <button
+                  className="secondary"
+                  onClick={() =>
+                    setChosenShowtime(null)
+                  }
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    );
+  }
+
+  /*
+    STATE 3
+    Pick movie
+  */
   return (
     <main className="shell">
       <header className="header">
         <div>
-          <h1 className="brand" style={{ fontSize: 34 }}>
-            ADMIN
+          <h1 className="brand">
+            OUR CINEMA
           </h1>
 
           <div className="subtitle">
-            Manage Our Cinema
+            Tonight&apos;s Selection
           </div>
         </div>
 
-        <Link href="/" className="admin-link">
-          Guest View
+        <Link
+          href="/admin"
+          className="admin-link"
+        >
+          Admin
         </Link>
       </header>
 
-      <section className="admin-card">
-        <h2>Schedule Selected Movie</h2>
-
-        {waitingScreenings.length === 0 ? (
-          <div className="status">
-            No movie is waiting for scheduling.
+      <section className="movie-grid">
+        {movies.length === 0 ? (
+          <div className="empty">
+            No available movies yet.
           </div>
         ) : (
-          waitingScreenings.map((screening) => {
-            const currentShowtimes = showtimes.filter(
-              (showtime) =>
-                showtime.screening_id === screening.id
-            );
-
-            return (
-              <div
-                key={screening.id}
-                style={{
-                  marginBottom: 28,
-                  paddingBottom: 28,
-                  borderBottom: "1px solid rgba(255,255,255,0.12)",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 16,
-                    alignItems: "flex-start",
-                    marginBottom: 20,
-                  }}
-                >
-                  <img
-                    src={screening.poster_url}
-                    alt={screening.movie_title}
-                    style={{
-                      width: 82,
-                      height: 123,
-                      objectFit: "cover",
-                      borderRadius: 8,
-                    }}
-                  />
-
-                  <div>
-                    <div
-                      className="row-title"
-                      style={{
-                        fontSize: 20,
-                        marginBottom: 6,
-                      }}
-                    >
-                      {screening.movie_title}
-                    </div>
-
-                    <div className="row-status">
-                      Add several possible showtimes.
-                    </div>
-                  </div>
-                </div>
-
-                <label className="label">
-                  Date
-                </label>
-
-                <input
-                  className="text-input"
-                  type="date"
-                  value={dateValues[screening.id] || ""}
-                  onChange={(e) =>
-                    setDateValues({
-                      ...dateValues,
-                      [screening.id]: e.target.value,
-                    })
-                  }
-                />
-
-                <label className="label">
-                  Time
-                </label>
-
-                <input
-                  className="text-input"
-                  type="time"
-                  value={timeValues[screening.id] || ""}
-                  onChange={(e) =>
-                    setTimeValues({
-                      ...timeValues,
-                      [screening.id]: e.target.value,
-                    })
-                  }
-                />
-
-                <div className="actions">
-                  <button
-                    className="primary"
-                    onClick={() => addShowtime(screening)}
-                    disabled={savingShowtime === screening.id}
-                  >
-                    {savingShowtime === screening.id
-                      ? "Adding…"
-                      : "Add Showtime"}
-                  </button>
-                </div>
-
-                {currentShowtimes.length > 0 && (
-                  <div
-                    style={{
-                      marginTop: 24,
-                    }}
-                  >
-                    <div
-                      className="label"
-                      style={{
-                        marginBottom: 10,
-                      }}
-                    >
-                      Available for Guest
-                    </div>
-
-                    {currentShowtimes.map((showtime) => (
-                      <div
-                        key={showtime.id}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          gap: 12,
-                          padding: "12px 0",
-                          borderTop:
-                            "1px solid rgba(255,255,255,0.08)",
-                        }}
-                      >
-                        <div>
-                          <strong>
-                            {showtime.screening_date}
-                          </strong>
-                          {" · "}
-                          {showtime.screening_time.slice(0, 5)}
-                          {showtime.status === "selected" && (
-                            <span> · SELECTED</span>
-                          )}
-                        </div>
-
-                        {showtime.status === "available" && (
-                          <button
-                            className="danger"
-                            onClick={() =>
-                              deleteShowtime(showtime)
-                            }
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {currentShowtimes.some(
-                  (showtime) =>
-                    showtime.status === "available"
-                ) && (
-                  <div
-                    style={{
-                      marginTop: 22,
-                    }}
-                  >
-                    <Link
-                      href="/"
-                      className="primary"
-                      style={{
-                        display: "inline-block",
-                        textDecoration: "none",
-                        textAlign: "center",
-                      }}
-                    >
-                      Go to Guest View
-                    </Link>
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </section>
-
-      <section className="admin-card">
-        <h2>Add Movie</h2>
-
-        <form onSubmit={submitMovie}>
-          <label className="label">
-            Poster
-          </label>
-
-          <input
-            className="file-input"
-            type="file"
-            accept="image/*"
-            onChange={(e) =>
-              pickFile(e.target.files?.[0] ?? null)
-            }
-          />
-
-          {preview && (
-            <img
-              className="preview"
-              src={preview}
-              alt="preview"
-            />
-          )}
-
-          <label className="label">
-            Movie title
-          </label>
-
-          <input
-            className="text-input"
-            value={title}
-            onChange={(e) =>
-              setTitle(e.target.value)
-            }
-            placeholder="Enter movie title"
-          />
-
-          <div className="actions">
-            <button
-              className="primary"
-              type="submit"
-              disabled={savingMovie}
-            >
-              {savingMovie
-                ? "Saving…"
-                : "Add Movie"}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      <section className="admin-card">
-        <h2>
-          Movie Pool (
-          {
-            movies.filter(
-              (movie) =>
-                movie.status === "available"
-            ).length
-          }
-          /9 available)
-        </h2>
-
-        <div className="admin-list">
-          {movies.map((movie) => (
-            <div
-              className="admin-row"
-              key={movie.id}
-            >
+          movies.map((movie) => (
+            <article key={movie.id}>
               <img
-                className="admin-thumb"
+                className="poster"
                 src={movie.poster_url}
                 alt={movie.title}
               />
 
-              <div>
-                <div className="row-title">
-                  {movie.title}
-                </div>
-
-                <div className="row-status">
-                  {movie.status}
-                </div>
+              <div className="movie-title">
+                {movie.title}
               </div>
 
               <button
-                className="danger"
+                className="pick-button"
                 onClick={() =>
-                  removeMovie(movie)
+                  setChosenMovie(movie)
                 }
               >
-                Delete
+                Choose
+              </button>
+            </article>
+          ))
+        )}
+      </section>
+
+      <div className="actions">
+        <button
+          className="primary"
+          onClick={randomPick}
+          disabled={!movies.length}
+        >
+          Random Pick
+        </button>
+      </div>
+
+      {chosenMovie && (
+        <div
+          className="modal-backdrop"
+          onClick={() =>
+            setChosenMovie(null)
+          }
+        >
+          <div
+            className="modal"
+            onClick={(e) =>
+              e.stopPropagation()
+            }
+          >
+            <img
+              src={chosenMovie.poster_url}
+              alt={chosenMovie.title}
+            />
+
+            <h3>
+              {chosenMovie.title}
+            </h3>
+
+            <p>
+              Choose this movie?
+            </p>
+
+            <div className="modal-actions">
+              <button
+                className="primary"
+                disabled={working}
+                onClick={() =>
+                  confirmMovie(chosenMovie)
+                }
+              >
+                {working
+                  ? "Selecting…"
+                  : "Confirm"}
+              </button>
+
+              <button
+                className="secondary"
+                onClick={() =>
+                  setChosenMovie(null)
+                }
+              >
+                Cancel
               </button>
             </div>
-          ))}
+          </div>
         </div>
-      </section>
+      )}
     </main>
   );
 }
