@@ -725,6 +725,22 @@ export default function HomePage() {
           >
             🎬 Watch History
           </Link>
+          <Link
+  href="/festival"
+  className="secondary"
+  style={{
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 7,
+    textDecoration: "none",
+    padding: "11px 17px",
+    fontSize: 14,
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+  }}
+>
+  🎞 Special Festival
+</Link>
         </div>
       </header>
     );
