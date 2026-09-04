@@ -230,7 +230,47 @@ export default function HomePage() {
       month: "long",
       day: "numeric",
     }).format(
-      new Date(Date.UTC(year, month - 1, day))
+      new Date(
+        Date.UTC(year, month - 1, day)
+      )
+    );
+  }
+
+  function HeaderActions() {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+        }}
+      >
+        <Link
+          href="/admin"
+          style={{
+            color: "inherit",
+            textDecoration: "none",
+            fontSize: 12,
+            opacity: 0.38,
+            letterSpacing: 0.5,
+          }}
+        >
+          Admin
+        </Link>
+
+        <Link
+          href="/ticket"
+          className="primary"
+          style={{
+            display: "inline-block",
+            textDecoration: "none",
+            padding: "9px 14px",
+            fontSize: 13,
+          }}
+        >
+          Ticket
+        </Link>
+      </div>
     );
   }
 
@@ -262,12 +302,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <Link
-            href="/ticket"
-            className="admin-link"
-          >
-            Ticket
-          </Link>
+          <HeaderActions />
         </header>
 
         <section
@@ -393,8 +428,7 @@ export default function HomePage() {
   }
 
   /*
-    No selected movie:
-    choose movie
+    Choose movie
   */
   return (
     <main className="shell">
@@ -409,12 +443,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <Link
-          href="/ticket"
-          className="admin-link"
-        >
-          Ticket
-        </Link>
+        <HeaderActions />
       </header>
 
       <section className="movie-grid">
