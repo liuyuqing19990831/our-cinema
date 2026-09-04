@@ -16,6 +16,7 @@ type Screening = {
   status: string;
   screening_date: string | null;
   screening_time: string | null;
+  watch_url: string | null;
 };
 
 export default function TicketPage() {
@@ -174,6 +175,9 @@ export default function TicketPage() {
     );
   }
 
+  /*
+    NO TICKET
+  */
   if (!ticket) {
     return (
       <main className="shell">
@@ -240,6 +244,9 @@ export default function TicketPage() {
     );
   }
 
+  /*
+    TICKET EXISTS
+  */
   return (
     <main className="shell">
       <Header />
@@ -254,10 +261,10 @@ export default function TicketPage() {
       >
         <div
           style={{
-            fontSize: 12,
+            fontSize: 11,
             letterSpacing: 3,
-            opacity: 0.6,
-            marginBottom: 20,
+            opacity: 0.55,
+            marginBottom: 22,
           }}
         >
           ADMIT TWO
@@ -272,16 +279,17 @@ export default function TicketPage() {
           }
           style={{
             width:
-              "min(220px, 70%)",
-            borderRadius: 10,
-            marginBottom: 24,
+              "min(240px, 76%)",
+            borderRadius: 12,
+            marginBottom: 26,
           }}
         />
 
         <h2
           style={{
-            fontSize: 28,
+            fontSize: 30,
             marginBottom: 22,
+            lineHeight: 1.15,
           }}
         >
           {
@@ -291,8 +299,9 @@ export default function TicketPage() {
 
         <div
           style={{
-            fontSize: 18,
-            marginBottom: 10,
+            fontSize: 17,
+            opacity: 0.75,
+            marginBottom: 8,
           }}
         >
           {ticket.screening_date
@@ -304,7 +313,7 @@ export default function TicketPage() {
 
         <div
           style={{
-            fontSize: 34,
+            fontSize: 38,
             fontWeight: 700,
             letterSpacing: 2,
           }}
@@ -321,30 +330,73 @@ export default function TicketPage() {
             paddingTop: 20,
             borderTop:
               "1px dashed rgba(255,255,255,0.25)",
-            fontSize: 12,
-            letterSpacing: 2,
-            opacity: 0.55,
           }}
         >
-          OUR CINEMA · TWO SEATS
+          {ticket.watch_url && (
+            <a
+              href={
+                ticket.watch_url
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="primary"
+              style={{
+                display:
+                  "block",
+                width: "100%",
+                boxSizing:
+                  "border-box",
+                textDecoration:
+                  "none",
+                padding:
+                  "15px 20px",
+                fontSize: 16,
+                fontWeight: 650,
+                marginBottom: 22,
+              }}
+            >
+              ▶ Watch Movie
+            </a>
+          )}
+
+          {!ticket.watch_url && (
+            <div
+              style={{
+                fontSize: 12,
+                opacity: 0.45,
+                marginBottom: 22,
+              }}
+            >
+              Watch link not added yet.
+            </div>
+          )}
+
+          <div
+            style={{
+              fontSize: 11,
+              letterSpacing: 2,
+              opacity: 0.5,
+            }}
+          >
+            OUR CINEMA · TWO SEATS
+          </div>
         </div>
 
         <div
           style={{
-            marginTop: 28,
+            marginTop: 26,
           }}
         >
           <Link
             href="/"
-            className="primary"
+            className="secondary"
             style={{
               display:
                 "inline-block",
               textDecoration:
                 "none",
               padding:
-                "12px 22px",
-              fontWeight: 600,
+                "11px 20px",
             }}
           >
             ← Movies
