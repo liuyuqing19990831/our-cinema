@@ -9,19 +9,52 @@ import { supabase } from "@/lib/supabase";
 type Screening = {
   id: number;
   created_at: string;
-  movie_id: number;
+
+  movie_id:
+    | number
+    | null;
+
   movie_title: string;
+
   poster_url: string;
+
   status: string;
-  screening_date: string | null;
-  screening_time: string | null;
-  watch_url: string | null;
-  watch_code: string | null;
+
+  screening_date:
+    | string
+    | null;
+
+  screening_time:
+    | string
+    | null;
+
+  watch_url:
+    | string
+    | null;
+
+  watch_code:
+    | string
+    | null;
+
+  festival_id:
+    | number
+    | null;
+};
+
+type Festival = {
+  id: number;
+  title: string;
+};
+
+type Ticket = Screening & {
+  festival_title:
+    | string
+    | null;
 };
 
 export default function TicketPage() {
   const [tickets, setTickets] =
-    useState<Screening[]>([]);
+    useState<Ticket[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -32,94 +65,253 @@ export default function TicketPage() {
   async function loadTickets() {
     setLoading(true);
 
-    const { data, error } =
-      await supabase
-        .from("screenings")
-        .select("*")
-        .eq(
-          "status",
-          "scheduled"
-        )
-        .not(
-          "screening_date",
-          "is",
-          null
-        )
-        .not(
-          "screening_time",
-          "is",
-          null
-        )
-        .order(
-          "screening_date",
-          {
-            ascending: true,
-          }
-        )
-        .order(
-          "screening_time",
-          {
-            ascending: true,
-          }
-        );
+    /*
+      LOAD ALL FUTURE
+      SCHEDULED SCREENINGS
+    */
 
-    if (error) {
-      console.error(error);
+    const {
+      data:
+        screeningData,
+      error:
+        screeningError,
+    } = await supabase
+      .from("screenings")
+      .select("*")
+      .eq(
+        "status",
+        "scheduled"
+      )
+      .not(
+        "screening_date",
+        "is",
+        null
+      )
+      .not(
+        "screening_time",
+        "is",
+        null
+      )
+      .order(
+        "screening_date",
+        {
+          ascending: true,
+        }
+      )
+      .order(
+        "screening_time",
+        {
+          ascending: true,
+        }
+      );
+
+    if (
+      screeningError
+    ) {
+      console.error(
+        screeningError
+      );
+
       setTickets([]);
       setLoading(false);
       return;
     }
 
-    const now = new Date();
+    const screenings =
+      (
+        screeningData ??
+        []
+      ) as Screening[];
+
+    /*
+      FIND FESTIVAL IDS
+    */
+
+    const festivalIds = [
+      ...new Set(
+        screenings
+          .map(
+            (screening) =>
+              screening.festival_id
+          )
+          .filter(
+            (
+              id
+            ): id is number =>
+              id !== null
+          )
+      ),
+    ];
+
+    /*
+      LOAD FESTIVAL TITLES
+    */
+
+    let festivalMap:
+      Record<
+        number,
+        string
+      > = {};
+
+    if (
+      festivalIds.length >
+      0
+    ) {
+      const {
+        data:
+          festivalData,
+        error:
+          festivalError,
+      } = await supabase
+        .from("festivals")
+        .select(
+          "id, title"
+        )
+        .in(
+          "id",
+          festivalIds
+        );
+
+      if (
+        festivalError
+      ) {
+        console.error(
+          festivalError
+        );
+      } else {
+        festivalMap =
+          (
+            (
+              festivalData ??
+              []
+            ) as Festival[]
+          ).reduce(
+            (
+              map,
+              festival
+            ) => {
+              map[
+                festival.id
+              ] =
+                festival.title;
+
+              return map;
+            },
+            {} as Record<
+              number,
+              string
+            >
+          );
+      }
+    }
+
+    /*
+      ONLY KEEP
+      FUTURE TICKETS
+    */
+
+    const now =
+      new Date();
 
     const activeTickets =
-      (
-        (data ?? []) as Screening[]
-      ).filter((ticket) => {
-        if (
-          !ticket.screening_date ||
-          !ticket.screening_time
-        ) {
-          return false;
-        }
+      screenings
+        .filter(
+          (ticket) => {
+            if (
+              !ticket.screening_date ||
+              !ticket.screening_time
+            ) {
+              return false;
+            }
 
-        const ticketTime =
-          new Date(
-            `${ticket.screening_date}T${ticket.screening_time}`
-          );
+            const ticketTime =
+              new Date(
+                `${ticket.screening_date}T${ticket.screening_time}`
+              );
 
-        return ticketTime >= now;
-      });
+            return (
+              ticketTime >=
+              now
+            );
+          }
+        )
+        .map(
+          (
+            ticket
+          ): Ticket => ({
+            ...ticket,
 
-    setTickets(activeTickets);
+            festival_title:
+              ticket.festival_id
+                ? festivalMap[
+                    ticket
+                      .festival_id
+                  ] ?? null
+                : null,
+          })
+        );
+
+    setTickets(
+      activeTickets
+    );
+
     setLoading(false);
   }
 
   useEffect(() => {
     loadTickets();
 
-    const channel = supabase
-      .channel("tickets-live")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "screenings",
-        },
-        () => loadTickets()
-      )
-      .subscribe();
+    const screeningChannel =
+      supabase
+        .channel(
+          "ticket-screenings-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table:
+              "screenings",
+          },
+          () =>
+            loadTickets()
+        )
+        .subscribe();
+
+    const festivalChannel =
+      supabase
+        .channel(
+          "ticket-festivals-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table:
+              "festivals",
+          },
+          () =>
+            loadTickets()
+        )
+        .subscribe();
 
     return () => {
       supabase.removeChannel(
-        channel
+        screeningChannel
+      );
+
+      supabase.removeChannel(
+        festivalChannel
       );
     };
   }, []);
 
   function goHome() {
-    window.location.replace("/");
+    window.location.replace(
+      "/"
+    );
   }
 
   function formatDate(
@@ -162,9 +354,11 @@ export default function TicketPage() {
   }
 
   async function copyCode(
-    ticket: Screening
+    ticket: Ticket
   ) {
-    if (!ticket.watch_code) {
+    if (
+      !ticket.watch_code
+    ) {
       return;
     }
 
@@ -204,21 +398,31 @@ export default function TicketPage() {
         style={{
           display:
             "inline-flex",
+
           alignItems:
             "center",
+
           justifyContent:
             "center",
+
           gap: 8,
+
           padding:
             bottom
               ? "10px 17px"
               : "11px 18px",
+
           fontSize: 13,
+
           fontWeight: 600,
+
           letterSpacing: 0.3,
+
           whiteSpace:
             "nowrap",
-          cursor: "pointer",
+
+          cursor:
+            "pointer",
         }}
       >
         <span
@@ -229,6 +433,7 @@ export default function TicketPage() {
         >
           ←
         </span>
+
         Cinema
       </button>
     );
@@ -239,7 +444,8 @@ export default function TicketPage() {
       <header
         className="header"
         style={{
-          alignItems: "center",
+          alignItems:
+            "center",
           gap: 16,
         }}
       >
@@ -280,6 +486,7 @@ export default function TicketPage() {
           style={{
             textAlign:
               "center",
+
             padding:
               "52px 24px",
           }}
@@ -306,6 +513,7 @@ export default function TicketPage() {
             className="status"
             style={{
               marginBottom: 30,
+
               lineHeight: 1.6,
             }}
           >
@@ -333,19 +541,101 @@ export default function TicketPage() {
         {tickets.map(
           (ticket) => (
             <section
-              key={ticket.id}
+              key={
+                ticket.id
+              }
               className="admin-card"
               style={{
                 textAlign:
                   "center",
+
                 padding: 30,
               }}
             >
+              {/*
+                FESTIVAL / NORMAL LABEL
+              */}
+
+              <div
+                style={{
+                  display:
+                    "flex",
+
+                  justifyContent:
+                    "center",
+
+                  marginBottom: 14,
+                }}
+              >
+                <div
+                  style={{
+                    display:
+                      "inline-flex",
+
+                    alignItems:
+                      "center",
+
+                    border:
+                      ticket.festival_id
+                        ? "1px solid rgba(239,229,209,0.30)"
+                        : "1px solid rgba(255,255,255,0.10)",
+
+                    borderRadius:
+                      999,
+
+                    padding:
+                      "6px 11px",
+
+                    fontSize: 9,
+
+                    letterSpacing:
+                      1.8,
+
+                    fontWeight:
+                      700,
+
+                    opacity:
+                      ticket.festival_id
+                        ? 0.92
+                        : 0.52,
+                  }}
+                >
+                  {ticket.festival_id
+                    ? "✦ SPECIAL FESTIVAL"
+                    : "OUR CINEMA"}
+                </div>
+              </div>
+
+              {/*
+                FESTIVAL TITLE
+              */}
+
+              {ticket.festival_title && (
+                <div
+                  style={{
+                    fontSize: 13,
+
+                    opacity: 0.62,
+
+                    marginBottom: 18,
+
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {
+                    ticket.festival_title
+                  }
+                </div>
+              )}
+
               <div
                 style={{
                   fontSize: 11,
+
                   letterSpacing: 3,
+
                   opacity: 0.55,
+
                   marginBottom: 22,
                 }}
               >
@@ -362,7 +652,9 @@ export default function TicketPage() {
                 style={{
                   width:
                     "min(240px, 76%)",
+
                   borderRadius: 12,
+
                   marginBottom: 26,
                 }}
               />
@@ -370,7 +662,9 @@ export default function TicketPage() {
               <h2
                 style={{
                   fontSize: 30,
+
                   marginBottom: 22,
+
                   lineHeight: 1.15,
                 }}
               >
@@ -382,7 +676,9 @@ export default function TicketPage() {
               <div
                 style={{
                   fontSize: 17,
+
                   opacity: 0.75,
+
                   marginBottom: 8,
                 }}
               >
@@ -396,7 +692,9 @@ export default function TicketPage() {
               <div
                 style={{
                   fontSize: 38,
+
                   fontWeight: 700,
+
                   letterSpacing: 2,
                 }}
               >
@@ -409,7 +707,9 @@ export default function TicketPage() {
               <div
                 style={{
                   marginTop: 30,
+
                   paddingTop: 22,
+
                   borderTop:
                     "1px dashed rgba(255,255,255,0.25)",
                 }}
@@ -425,15 +725,23 @@ export default function TicketPage() {
                     style={{
                       display:
                         "block",
-                      width: "100%",
+
+                      width:
+                        "100%",
+
                       boxSizing:
                         "border-box",
+
                       textDecoration:
                         "none",
+
                       padding:
                         "15px 20px",
+
                       fontSize: 16,
+
                       fontWeight: 650,
+
                       marginBottom:
                         ticket.watch_code
                           ? 14
@@ -449,20 +757,29 @@ export default function TicketPage() {
                     style={{
                       padding:
                         "16px 18px",
+
                       border:
                         "1px solid rgba(255,255,255,0.10)",
+
                       borderRadius: 12,
+
                       background:
                         "rgba(255,255,255,0.025)",
+
                       marginBottom: 24,
-                      textAlign: "left",
+
+                      textAlign:
+                        "left",
                     }}
                   >
                     <div
                       style={{
                         fontSize: 10,
+
                         letterSpacing: 2,
+
                         opacity: 0.45,
+
                         marginBottom: 9,
                       }}
                     >
@@ -471,19 +788,26 @@ export default function TicketPage() {
 
                     <div
                       style={{
-                        display: "flex",
+                        display:
+                          "flex",
+
                         justifyContent:
                           "space-between",
+
                         alignItems:
                           "center",
+
                         gap: 12,
                       }}
                     >
                       <div
                         style={{
                           fontSize: 22,
+
                           fontWeight: 700,
+
                           letterSpacing: 2,
+
                           wordBreak:
                             "break-all",
                         }}
@@ -502,8 +826,10 @@ export default function TicketPage() {
                         }
                         style={{
                           flexShrink: 0,
+
                           padding:
                             "9px 13px",
+
                           fontSize: 12,
                         }}
                       >
@@ -521,7 +847,9 @@ export default function TicketPage() {
                     <div
                       style={{
                         fontSize: 12,
+
                         opacity: 0.45,
+
                         marginBottom: 24,
                       }}
                     >
@@ -532,11 +860,15 @@ export default function TicketPage() {
                 <div
                   style={{
                     fontSize: 11,
+
                     letterSpacing: 2,
+
                     opacity: 0.5,
                   }}
                 >
-                  OUR CINEMA · TWO SEATS
+                  {ticket.festival_id
+                    ? "SPECIAL FESTIVAL · TWO SEATS"
+                    : "OUR CINEMA · TWO SEATS"}
                 </div>
               </div>
             </section>
