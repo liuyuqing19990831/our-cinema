@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import type { Movie } from "@/types/movie";
 
 type Screening = {
   id: number;
@@ -15,41 +17,133 @@ type Screening = {
   screening_time: string | null;
 };
 
-export default function TicketPage() {
-  const [ticket, setTicket] = useState<Screening | null>(null);
+type Showtime = {
+  id: number;
+  created_at: string;
+  screening_id: number;
+  screening_date: string;
+  screening_time: string;
+  status: string;
+};
+
+export default function HomePage() {
+  const router = useRouter();
+
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [screening, setScreening] =
+    useState<Screening | null>(null);
+
+  const [showtimes, setShowtimes] =
+    useState<Showtime[]>([]);
+
   const [loading, setLoading] = useState(true);
 
-  async function loadTicket() {
+  const [chosenMovie, setChosenMovie] =
+    useState<Movie | null>(null);
+
+  const [chosenShowtime, setChosenShowtime] =
+    useState<Showtime | null>(null);
+
+  const [working, setWorking] =
+    useState(false);
+
+  async function loadData() {
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from("screenings")
+    /*
+      Available movie pool
+    */
+    const { data: movieData } = await supabase
+      .from("movies")
       .select("*")
-      .eq("status", "scheduled")
-      .order("created_at", { ascending: false })
-      .limit(1);
+      .eq("status", "available")
+      .order("created_at", {
+        ascending: true,
+      });
 
-    if (error) {
-      console.error(error);
-      setTicket(null);
-      setLoading(false);
-      return;
-    }
+    setMovies(
+      (movieData ?? []) as Movie[]
+    );
 
-    const currentTicket =
-      data && data.length > 0
-        ? (data[0] as Screening)
+    /*
+      Only look for a movie that
+      is currently waiting for showtime selection
+    */
+    const { data: screeningData } =
+      await supabase
+        .from("screenings")
+        .select("*")
+        .eq(
+          "status",
+          "waiting_schedule"
+        )
+        .order("created_at", {
+          ascending: false,
+        })
+        .limit(1);
+
+    const currentScreening =
+      screeningData &&
+      screeningData.length > 0
+        ? (screeningData[0] as Screening)
         : null;
 
-    setTicket(currentTicket);
+    setScreening(currentScreening);
+
+    if (currentScreening) {
+      const { data: showtimeData } =
+        await supabase
+          .from("showtimes")
+          .select("*")
+          .eq(
+            "screening_id",
+            currentScreening.id
+          )
+          .eq(
+            "status",
+            "available"
+          )
+          .order(
+            "screening_date",
+            {
+              ascending: true,
+            }
+          )
+          .order(
+            "screening_time",
+            {
+              ascending: true,
+            }
+          );
+
+      setShowtimes(
+        (showtimeData ?? []) as Showtime[]
+      );
+    } else {
+      setShowtimes([]);
+    }
+
     setLoading(false);
   }
 
   useEffect(() => {
-    loadTicket();
+    loadData();
 
-    const channel = supabase
-      .channel("ticket-live")
+    const movieChannel = supabase
+      .channel("guest-movies-live")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "movies",
+        },
+        () => loadData()
+      )
+      .subscribe();
+
+    const screeningChannel = supabase
+      .channel("guest-screenings-live")
       .on(
         "postgres_changes",
         {
@@ -57,31 +151,206 @@ export default function TicketPage() {
           schema: "public",
           table: "screenings",
         },
-        () => loadTicket()
+        () => loadData()
+      )
+      .subscribe();
+
+    const showtimeChannel = supabase
+      .channel("guest-showtimes-live")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "showtimes",
+        },
+        () => loadData()
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(movieChannel);
+      supabase.removeChannel(screeningChannel);
+      supabase.removeChannel(showtimeChannel);
     };
   }, []);
 
-  function formatDate(date: string) {
-    const parts = date.split("-");
+  function randomPick() {
+    if (!movies.length) {
+      return;
+    }
 
-    if (parts.length !== 3) {
+    const movie =
+      movies[
+        Math.floor(
+          Math.random() *
+            movies.length
+        )
+      ];
+
+    setChosenMovie(movie);
+  }
+
+  async function confirmMovie(
+    movie: Movie
+  ) {
+    setWorking(true);
+
+    /*
+      Create waiting screening
+    */
+    const {
+      error: screeningError,
+    } = await supabase
+      .from("screenings")
+      .insert({
+        movie_id: movie.id,
+        movie_title: movie.title,
+        poster_url:
+          movie.poster_url,
+        status:
+          "waiting_schedule",
+      });
+
+    if (screeningError) {
+      setWorking(false);
+      alert(
+        screeningError.message
+      );
+      return;
+    }
+
+    /*
+      Remove from available pool
+    */
+    const {
+      error: movieError,
+    } = await supabase
+      .from("movies")
+      .update({
+        status: "selected",
+      })
+      .eq("id", movie.id)
+      .eq(
+        "status",
+        "available"
+      );
+
+    setWorking(false);
+
+    if (movieError) {
+      alert(
+        movieError.message
+      );
+      return;
+    }
+
+    setChosenMovie(null);
+
+    await loadData();
+  }
+
+  async function confirmShowtime(
+    showtime: Showtime
+  ) {
+    if (!screening) {
+      return;
+    }
+
+    setWorking(true);
+
+    /*
+      Mark selected showtime
+    */
+    const {
+      error: showtimeError,
+    } = await supabase
+      .from("showtimes")
+      .update({
+        status: "selected",
+      })
+      .eq(
+        "id",
+        showtime.id
+      )
+      .eq(
+        "status",
+        "available"
+      );
+
+    if (showtimeError) {
+      setWorking(false);
+      alert(
+        showtimeError.message
+      );
+      return;
+    }
+
+    /*
+      Generate final screening/ticket
+    */
+    const {
+      error: screeningError,
+    } = await supabase
+      .from("screenings")
+      .update({
+        status: "scheduled",
+        screening_date:
+          showtime.screening_date,
+        screening_time:
+          showtime.screening_time,
+      })
+      .eq(
+        "id",
+        screening.id
+      );
+
+    setWorking(false);
+
+    if (screeningError) {
+      alert(
+        screeningError.message
+      );
+      return;
+    }
+
+    setChosenShowtime(null);
+
+    /*
+      Go to ticket page
+    */
+    router.push("/ticket");
+  }
+
+  function formatDate(
+    date: string
+  ) {
+    const parts =
+      date.split("-");
+
+    if (
+      parts.length !== 3
+    ) {
       return date;
     }
 
-    const year = Number(parts[0]);
-    const month = Number(parts[1]);
-    const day = Number(parts[2]);
+    const year =
+      Number(parts[0]);
 
-    return new Intl.DateTimeFormat("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }).format(
+    const month =
+      Number(parts[1]);
+
+    const day =
+      Number(parts[2]);
+
+    return new Intl.DateTimeFormat(
+      "en-US",
+      {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }
+    ).format(
       new Date(
         Date.UTC(
           year,
@@ -92,194 +361,336 @@ export default function TicketPage() {
     );
   }
 
+  function Header() {
+    return (
+      <header
+        className="header"
+        style={{
+          alignItems: "center",
+        }}
+      >
+        <div>
+          <h1 className="brand">
+            OUR CINEMA
+          </h1>
+        </div>
+
+        <Link
+          href="/ticket"
+          className="primary"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            textDecoration: "none",
+            padding: "11px 17px",
+            fontSize: 14,
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+          }}
+        >
+          🎟 View Ticket
+        </Link>
+      </header>
+    );
+  }
+
   if (loading) {
     return (
       <main className="shell">
         <div className="empty">
-          Loading ticket…
+          Loading…
         </div>
       </main>
     );
   }
 
   /*
-    没有票
+    A movie has already been selected.
+    Guest now chooses a showtime.
   */
-  if (!ticket) {
+  if (screening) {
     return (
       <main className="shell">
-        <header className="header">
-          <div>
-            <h1 className="brand">
-              OUR CINEMA
-            </h1>
-
-            <div className="subtitle">
-              Movie Ticket
-            </div>
-          </div>
-
-          <Link
-            href="/"
-            className="admin-link"
-          >
-            Movies
-          </Link>
-        </header>
+        <Header />
 
         <section
           className="admin-card"
           style={{
             textAlign: "center",
-            padding: "52px 24px",
           }}
         >
           <div
             style={{
-              fontSize: 44,
-              marginBottom: 18,
+              fontSize: 12,
+              letterSpacing: 2,
+              opacity: 0.5,
+              marginBottom: 16,
             }}
           >
-            🎟
+            CHOOSE A SHOWTIME
           </div>
 
-          <h2
+          <img
+            src={
+              screening.poster_url
+            }
+            alt={
+              screening.movie_title
+            }
             style={{
-              fontSize: 26,
-              marginBottom: 12,
+              width: 150,
+              borderRadius: 8,
+              marginBottom: 16,
             }}
-          >
-            No Ticket Yet
+          />
+
+          <h2>
+            {
+              screening.movie_title
+            }
           </h2>
 
-          <div
-            className="status"
-            style={{
-              marginBottom: 30,
-              lineHeight: 1.6,
-            }}
-          >
-            Your ticket will appear here
-            after you choose a showtime.
-          </div>
-
-          <Link
-            href="/"
-            className="primary"
-            style={{
-              display: "inline-block",
-              textDecoration: "none",
-              padding: "12px 20px",
-            }}
-          >
-            Choose Movie
-          </Link>
+          {showtimes.length ===
+          0 ? (
+            <div
+              className="status"
+              style={{
+                marginTop: 20,
+              }}
+            >
+              Waiting for showtimes…
+            </div>
+          ) : (
+            <div
+              style={{
+                marginTop: 24,
+                display: "grid",
+                gap: 12,
+              }}
+            >
+              {showtimes.map(
+                (showtime) => (
+                  <button
+                    key={
+                      showtime.id
+                    }
+                    className="secondary"
+                    style={{
+                      padding: 16,
+                      fontSize: 16,
+                    }}
+                    onClick={() =>
+                      setChosenShowtime(
+                        showtime
+                      )
+                    }
+                  >
+                    {formatDate(
+                      showtime.screening_date
+                    )}
+                    {" · "}
+                    {showtime.screening_time.slice(
+                      0,
+                      5
+                    )}
+                  </button>
+                )
+              )}
+            </div>
+          )}
         </section>
+
+        {chosenShowtime && (
+          <div
+            className="modal-backdrop"
+            onClick={() =>
+              setChosenShowtime(
+                null
+              )
+            }
+          >
+            <div
+              className="modal"
+              onClick={(e) =>
+                e.stopPropagation()
+              }
+            >
+              <h3>
+                Confirm Showtime
+              </h3>
+
+              <p>
+                {formatDate(
+                  chosenShowtime.screening_date
+                )}
+                {" · "}
+                {chosenShowtime.screening_time.slice(
+                  0,
+                  5
+                )}
+              </p>
+
+              <div className="modal-actions">
+                <button
+                  className="primary"
+                  disabled={
+                    working
+                  }
+                  onClick={() =>
+                    confirmShowtime(
+                      chosenShowtime
+                    )
+                  }
+                >
+                  {working
+                    ? "Confirming…"
+                    : "Confirm"}
+                </button>
+
+                <button
+                  className="secondary"
+                  onClick={() =>
+                    setChosenShowtime(
+                      null
+                    )
+                  }
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     );
   }
 
   /*
-    已经出票
+    Normal movie selection page
   */
   return (
     <main className="shell">
-      <header className="header">
-        <div>
-          <h1 className="brand">
-            OUR CINEMA
-          </h1>
+      <Header />
 
-          <div className="subtitle">
-            Your Movie Ticket
+      <section className="movie-grid">
+        {movies.length === 0 ? (
+          <div className="empty">
+            No available movies yet.
+          </div>
+        ) : (
+          movies.map(
+            (movie) => (
+              <article
+                key={movie.id}
+              >
+                <img
+                  className="poster"
+                  src={
+                    movie.poster_url
+                  }
+                  alt={
+                    movie.title
+                  }
+                />
+
+                <div className="movie-title">
+                  {
+                    movie.title
+                  }
+                </div>
+
+                <button
+                  className="pick-button"
+                  onClick={() =>
+                    setChosenMovie(
+                      movie
+                    )
+                  }
+                >
+                  Choose
+                </button>
+              </article>
+            )
+          )
+        )}
+      </section>
+
+      <div className="actions">
+        <button
+          className="primary"
+          onClick={randomPick}
+          disabled={
+            !movies.length
+          }
+        >
+          Random Pick
+        </button>
+      </div>
+
+      {chosenMovie && (
+        <div
+          className="modal-backdrop"
+          onClick={() =>
+            setChosenMovie(null)
+          }
+        >
+          <div
+            className="modal"
+            onClick={(e) =>
+              e.stopPropagation()
+            }
+          >
+            <img
+              src={
+                chosenMovie.poster_url
+              }
+              alt={
+                chosenMovie.title
+              }
+            />
+
+            <h3>
+              {
+                chosenMovie.title
+              }
+            </h3>
+
+            <p>
+              Choose this movie?
+            </p>
+
+            <div className="modal-actions">
+              <button
+                className="primary"
+                disabled={
+                  working
+                }
+                onClick={() =>
+                  confirmMovie(
+                    chosenMovie
+                  )
+                }
+              >
+                {working
+                  ? "Selecting…"
+                  : "Confirm"}
+              </button>
+
+              <button
+                className="secondary"
+                onClick={() =>
+                  setChosenMovie(
+                    null
+                  )
+                }
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
-
-        <Link
-          href="/"
-          className="admin-link"
-        >
-          Movies
-        </Link>
-      </header>
-
-      <section
-        className="admin-card"
-        style={{
-          textAlign: "center",
-          padding: 30,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 12,
-            letterSpacing: 3,
-            opacity: 0.6,
-            marginBottom: 20,
-          }}
-        >
-          ADMIT TWO
-        </div>
-
-        <img
-          src={ticket.poster_url}
-          alt={ticket.movie_title}
-          style={{
-            width: "min(220px, 70%)",
-            borderRadius: 10,
-            marginBottom: 24,
-          }}
-        />
-
-        <h2
-          style={{
-            fontSize: 28,
-            marginBottom: 22,
-          }}
-        >
-          {ticket.movie_title}
-        </h2>
-
-        <div
-          style={{
-            fontSize: 18,
-            marginBottom: 10,
-          }}
-        >
-          {ticket.screening_date
-            ? formatDate(
-                ticket.screening_date
-              )
-            : ""}
-        </div>
-
-        <div
-          style={{
-            fontSize: 34,
-            fontWeight: 700,
-            letterSpacing: 2,
-          }}
-        >
-          {ticket.screening_time?.slice(
-            0,
-            5
-          )}
-        </div>
-
-        <div
-          style={{
-            marginTop: 30,
-            paddingTop: 20,
-            borderTop:
-              "1px dashed rgba(255,255,255,0.25)",
-            fontSize: 12,
-            letterSpacing: 2,
-            opacity: 0.55,
-          }}
-        >
-          OUR CINEMA · TWO SEATS
-        </div>
-      </section>
+      )}
     </main>
   );
 }
