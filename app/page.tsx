@@ -18,6 +18,13 @@ type Screening = {
   status: string;
   screening_date: string | null;
   screening_time: string | null;
+
+  niu_rating: number | null;
+  xia_rating: number | null;
+  niu_rated_at: string | null;
+  xia_rated_at: string | null;
+
+  rating_prompt_shown: boolean;
 };
 
 type Showtime = {
@@ -36,9 +43,7 @@ export default function HomePage() {
     useState<Movie[]>([]);
 
   const [screening, setScreening] =
-    useState<Screening | null>(
-      null
-    );
+    useState<Screening | null>(null);
 
   const [showtimes, setShowtimes] =
     useState<Showtime[]>([]);
@@ -49,9 +54,7 @@ export default function HomePage() {
   const [
     chosenMovie,
     setChosenMovie,
-  ] = useState<Movie | null>(
-    null
-  );
+  ] = useState<Movie | null>(null);
 
   const [
     chosenShowtime,
@@ -63,12 +66,43 @@ export default function HomePage() {
   const [working, setWorking] =
     useState(false);
 
+  /*
+    RATING PROMPT
+  */
+
+  const [
+    ratingScreening,
+    setRatingScreening,
+  ] = useState<Screening | null>(
+    null
+  );
+
+  const [
+    niuRating,
+    setNiuRating,
+  ] = useState<number | null>(
+    null
+  );
+
+  const [
+    xiaRating,
+    setXiaRating,
+  ] = useState<number | null>(
+    null
+  );
+
+  const [
+    savingRating,
+    setSavingRating,
+  ] = useState(false);
+
+  /*
+    LOAD MAIN PAGE
+  */
+
   async function loadData() {
     setLoading(true);
 
-    /*
-      AVAILABLE MOVIE POOL
-    */
     const { data: movieData } =
       await supabase
         .from("movies")
@@ -85,10 +119,6 @@ export default function HomePage() {
       (movieData ?? []) as Movie[]
     );
 
-    /*
-      CURRENT MOVIE WAITING
-      FOR SHOWTIME SELECTION
-    */
     const {
       data: screeningData,
     } = await supabase
@@ -151,8 +181,121 @@ export default function HomePage() {
     setLoading(false);
   }
 
+  /*
+    CHECK WHETHER A PAST MOVIE
+    NEEDS ITS ONE-TIME RATING POPUP
+  */
+
+  async function checkRatingPrompt() {
+    const { data, error } =
+      await supabase
+        .from("screenings")
+        .select("*")
+        .eq(
+          "status",
+          "scheduled"
+        )
+        .eq(
+          "rating_prompt_shown",
+          false
+        )
+        .not(
+          "screening_date",
+          "is",
+          null
+        )
+        .not(
+          "screening_time",
+          "is",
+          null
+        )
+        .order(
+          "screening_date",
+          {
+            ascending: false,
+          }
+        )
+        .order(
+          "screening_time",
+          {
+            ascending: false,
+          }
+        );
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    const now = new Date();
+
+    const pastScreening =
+      (
+        (data ?? []) as Screening[]
+      ).find((item) => {
+        if (
+          !item.screening_date ||
+          !item.screening_time
+        ) {
+          return false;
+        }
+
+        const movieTime =
+          new Date(
+            `${item.screening_date}T${item.screening_time}`
+          );
+
+        return movieTime < now;
+      });
+
+    if (!pastScreening) {
+      return;
+    }
+
+    /*
+      IMPORTANT:
+      Mark it as already shown BEFORE opening.
+      Therefore this popup truly appears only once.
+    */
+
+    const { error: updateError } =
+      await supabase
+        .from("screenings")
+        .update({
+          rating_prompt_shown: true,
+        })
+        .eq(
+          "id",
+          pastScreening.id
+        );
+
+    if (updateError) {
+      console.error(
+        updateError
+      );
+      return;
+    }
+
+    setNiuRating(
+      pastScreening.niu_rating
+    );
+
+    setXiaRating(
+      pastScreening.xia_rating
+    );
+
+    setRatingScreening(
+      pastScreening
+    );
+  }
+
   useEffect(() => {
-    loadData();
+    async function initialize() {
+      await loadData();
+      await checkRatingPrompt();
+    }
+
+    initialize();
 
     const movieChannel =
       supabase
@@ -217,6 +360,91 @@ export default function HomePage() {
     };
   }, []);
 
+  /*
+    RATING FUNCTIONS
+  */
+
+  function chooseRating(
+    person: "niu" | "xia",
+    value: number
+  ) {
+    if (person === "niu") {
+      setNiuRating(
+        niuRating === value
+          ? null
+          : value
+      );
+    } else {
+      setXiaRating(
+        xiaRating === value
+          ? null
+          : value
+      );
+    }
+  }
+
+  async function saveRatings() {
+    if (!ratingScreening) {
+      return;
+    }
+
+    setSavingRating(true);
+
+    const now =
+      new Date().toISOString();
+
+    const { error } =
+      await supabase
+        .from("screenings")
+        .update({
+          niu_rating:
+            niuRating,
+          xia_rating:
+            xiaRating,
+
+          niu_rated_at:
+            niuRating
+              ? now
+              : null,
+
+          xia_rated_at:
+            xiaRating
+              ? now
+              : null,
+        })
+        .eq(
+          "id",
+          ratingScreening.id
+        );
+
+    setSavingRating(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setRatingScreening(null);
+
+    router.push(
+      "/history"
+    );
+  }
+
+  function skipRating() {
+    setRatingScreening(
+      null
+    );
+
+    router.push(
+      "/history"
+    );
+  }
+
+  /*
+    MOVIE SELECTION
+  */
+
   function randomPick() {
     if (!movies.length) {
       return;
@@ -238,9 +466,6 @@ export default function HomePage() {
   ) {
     setWorking(true);
 
-    /*
-      CREATE SCREENING
-    */
     const {
       error:
         screeningError,
@@ -269,9 +494,6 @@ export default function HomePage() {
       return;
     }
 
-    /*
-      REMOVE MOVIE FROM POOL
-    */
     const {
       error: movieError,
     } = await supabase
@@ -303,6 +525,10 @@ export default function HomePage() {
     await loadData();
   }
 
+  /*
+    SHOWTIME SELECTION
+  */
+
   async function confirmShowtime(
     showtime: Showtime
   ) {
@@ -312,9 +538,6 @@ export default function HomePage() {
 
     setWorking(true);
 
-    /*
-      MARK SHOWTIME SELECTED
-    */
     const {
       error: showtimeError,
     } = await supabase
@@ -343,20 +566,23 @@ export default function HomePage() {
       return;
     }
 
-    /*
-      GENERATE TICKET
-    */
     const {
       error:
         screeningError,
     } = await supabase
       .from("screenings")
       .update({
-        status: "scheduled",
+        status:
+          "scheduled",
+
         screening_date:
           showtime.screening_date,
+
         screening_time:
           showtime.screening_time,
+
+        rating_prompt_shown:
+          false,
       })
       .eq(
         "id",
@@ -379,8 +605,14 @@ export default function HomePage() {
       null
     );
 
-    router.push("/ticket");
+    router.push(
+      "/ticket"
+    );
   }
+
+  /*
+    DATE FORMAT
+  */
 
   function formatDate(
     date: string
@@ -421,12 +653,17 @@ export default function HomePage() {
     );
   }
 
+  /*
+    HEADER
+  */
+
   function Header() {
     return (
       <header
         className="header"
         style={{
-          alignItems: "center",
+          alignItems:
+            "center",
           gap: 16,
         }}
       >
@@ -493,6 +730,254 @@ export default function HomePage() {
     );
   }
 
+  /*
+    STAR ROW FOR POPUP
+  */
+
+  function RatingStars({
+    label,
+    person,
+    rating,
+  }: {
+    label: string;
+    person:
+      | "niu"
+      | "xia";
+    rating: number | null;
+  }) {
+    return (
+      <div
+        style={{
+          padding:
+            "18px 0",
+          borderTop:
+            "1px solid rgba(255,255,255,0.08)",
+        }}
+      >
+        <div
+          style={{
+            display:
+              "flex",
+            justifyContent:
+              "space-between",
+            alignItems:
+              "center",
+            marginBottom: 12,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 16,
+              fontWeight: 650,
+            }}
+          >
+            {label}
+          </div>
+
+          <div
+            style={{
+              fontSize: 12,
+              opacity: 0.45,
+            }}
+          >
+            {rating
+              ? `${rating}/5`
+              : "Not rated"}
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            justifyContent:
+              "center",
+          }}
+        >
+          {[1, 2, 3, 4, 5].map(
+            (star) => (
+              <button
+                key={star}
+                onClick={() =>
+                  chooseRating(
+                    person,
+                    star
+                  )
+                }
+                style={{
+                  border:
+                    "none",
+                  background:
+                    "transparent",
+                  cursor:
+                    "pointer",
+                  fontSize: 36,
+                  padding:
+                    "2px",
+                  lineHeight: 1,
+
+                  color:
+                    rating &&
+                    star <= rating
+                      ? "inherit"
+                      : "rgba(255,255,255,0.22)",
+                }}
+              >
+                ★
+              </button>
+            )
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /*
+    RATING POPUP
+  */
+
+  function RatingPopup() {
+    if (
+      !ratingScreening
+    ) {
+      return null;
+    }
+
+    return (
+      <div className="modal-backdrop">
+        <div
+          className="modal"
+          style={{
+            width:
+              "min(430px, 92vw)",
+            textAlign:
+              "center",
+            padding:
+              "28px 24px",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              letterSpacing: 2.4,
+              opacity: 0.45,
+              marginBottom: 16,
+            }}
+          >
+            AFTER THE MOVIE
+          </div>
+
+          <img
+            src={
+              ratingScreening.poster_url
+            }
+            alt={
+              ratingScreening.movie_title
+            }
+            style={{
+              width: 105,
+              aspectRatio:
+                "2 / 3",
+              objectFit:
+                "cover",
+              borderRadius: 10,
+              marginBottom: 16,
+            }}
+          />
+
+          <h2
+            style={{
+              marginBottom: 6,
+            }}
+          >
+            How was the movie?
+          </h2>
+
+          <div
+            style={{
+              fontSize: 17,
+              fontWeight: 600,
+              marginBottom: 20,
+            }}
+          >
+            {
+              ratingScreening.movie_title
+            }
+          </div>
+
+          <RatingStars
+            label="牛"
+            person="niu"
+            rating={
+              niuRating
+            }
+          />
+
+          <RatingStars
+            label="虾"
+            person="xia"
+            rating={
+              xiaRating
+            }
+          />
+
+          <button
+            className="primary"
+            disabled={
+              savingRating
+            }
+            onClick={
+              saveRatings
+            }
+            style={{
+              width: "100%",
+              marginTop: 12,
+              padding: 15,
+            }}
+          >
+            {savingRating
+              ? "Saving…"
+              : "Save Ratings"}
+          </button>
+
+          <button
+            className="secondary"
+            disabled={
+              savingRating
+            }
+            onClick={
+              skipRating
+            }
+            style={{
+              width: "100%",
+              marginTop: 10,
+              padding: 13,
+            }}
+          >
+            Skip for now
+          </button>
+
+          <div
+            style={{
+              fontSize: 11,
+              opacity: 0.4,
+              marginTop: 14,
+              lineHeight: 1.5,
+            }}
+          >
+            You can always rate or
+            change ratings later in
+            Watch History.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /*
+    LOADING
+  */
+
   if (loading) {
     return (
       <main className="shell">
@@ -504,8 +989,9 @@ export default function HomePage() {
   }
 
   /*
-    SHOWTIME SELECTION
+    SHOWTIME SELECTION PAGE
   */
+
   if (screening) {
     return (
       <main className="shell">
@@ -610,7 +1096,9 @@ export default function HomePage() {
                     {formatDate(
                       showtime.screening_date
                     )}
+
                     {" · "}
+
                     {showtime.screening_time.slice(
                       0,
                       5
@@ -645,7 +1133,9 @@ export default function HomePage() {
                 {formatDate(
                   chosenShowtime.screening_date
                 )}
+
                 {" · "}
+
                 {chosenShowtime.screening_time.slice(
                   0,
                   5
@@ -683,13 +1173,16 @@ export default function HomePage() {
             </div>
           </div>
         )}
+
+        <RatingPopup />
       </main>
     );
   }
 
   /*
-    MOVIE SELECTION
+    NORMAL MOVIE SELECTION PAGE
   */
+
   return (
     <main className="shell">
       <Header />
@@ -812,6 +1305,8 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      <RatingPopup />
     </main>
   );
 }
