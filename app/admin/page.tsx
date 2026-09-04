@@ -32,15 +32,19 @@ type Showtime = {
 
 export default function AdminPage() {
   const [title, setTitle] = useState("");
+
   const [file, setFile] =
     useState<File | null>(null);
+
   const [preview, setPreview] =
     useState("");
 
   const [movies, setMovies] =
     useState<Movie[]>([]);
+
   const [screenings, setScreenings] =
     useState<Screening[]>([]);
+
   const [showtimes, setShowtimes] =
     useState<Showtime[]>([]);
 
@@ -65,6 +69,11 @@ export default function AdminPage() {
   const [
     savingShowtime,
     setSavingShowtime,
+  ] = useState<number | null>(null);
+
+  const [
+    savingWatchLink,
+    setSavingWatchLink,
   ] = useState<number | null>(null);
 
   async function loadMovies() {
@@ -93,21 +102,30 @@ export default function AdminPage() {
 
     setScreenings(items);
 
-    const initialWatchValues:
-      Record<number, string> = {};
-
-    items.forEach(
-      (screening) => {
-        initialWatchValues[
-          screening.id
-        ] =
-          screening.watch_url ??
-          "";
-      }
-    );
-
     setWatchValues(
-      initialWatchValues
+      (currentValues) => {
+        const nextValues = {
+          ...currentValues,
+        };
+
+        items.forEach(
+          (screening) => {
+            if (
+              nextValues[
+                screening.id
+              ] === undefined
+            ) {
+              nextValues[
+                screening.id
+              ] =
+                screening.watch_url ??
+                "";
+            }
+          }
+        );
+
+        return nextValues;
+      }
     );
   }
 
@@ -138,21 +156,18 @@ export default function AdminPage() {
   useEffect(() => {
     loadAll();
 
-    const movieChannel =
-      supabase
-        .channel(
-          "admin-movies-live"
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "movies",
-          },
-          loadMovies
-        )
-        .subscribe();
+    const movieChannel = supabase
+      .channel("admin-movies-live")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "movies",
+        },
+        loadMovies
+      )
+      .subscribe();
 
     const screeningChannel =
       supabase
@@ -278,9 +293,11 @@ export default function AdminPage() {
 
     if (upload.error) {
       setSavingMovie(false);
+
       alert(
         upload.error.message
       );
+
       return;
     }
 
@@ -307,10 +324,12 @@ export default function AdminPage() {
       alert(
         insert.error.message
       );
+
       return;
     }
 
     setTitle("");
+
     pickFile(null);
 
     await loadMovies();
@@ -336,10 +355,52 @@ export default function AdminPage() {
 
     if (error) {
       alert(error.message);
+
       return;
     }
 
     await loadMovies();
+  }
+
+  async function saveWatchUrl(
+    screening: Screening
+  ) {
+    const watchUrl =
+      watchValues[
+        screening.id
+      ]?.trim() || null;
+
+    setSavingWatchLink(
+      screening.id
+    );
+
+    const { error } =
+      await supabase
+        .from("screenings")
+        .update({
+          watch_url:
+            watchUrl,
+        })
+        .eq(
+          "id",
+          screening.id
+        );
+
+    setSavingWatchLink(null);
+
+    if (error) {
+      alert(error.message);
+
+      return;
+    }
+
+    alert(
+      watchUrl
+        ? "Watch link saved."
+        : "Watch link removed."
+    );
+
+    await loadScreenings();
   }
 
   async function addShowtime(
@@ -355,11 +416,6 @@ export default function AdminPage() {
         screening.id
       ];
 
-    const watchUrl =
-      watchValues[
-        screening.id
-      ]?.trim() || null;
-
     if (
       !date ||
       !time
@@ -367,6 +423,7 @@ export default function AdminPage() {
       alert(
         "Please choose both date and time."
       );
+
       return;
     }
 
@@ -374,8 +431,16 @@ export default function AdminPage() {
       screening.id
     );
 
+    /*
+      Save latest watch link as well
+    */
+    const watchUrl =
+      watchValues[
+        screening.id
+      ]?.trim() || null;
+
     const {
-      error: watchUrlError,
+      error: watchError,
     } = await supabase
       .from("screenings")
       .update({
@@ -387,13 +452,11 @@ export default function AdminPage() {
         screening.id
       );
 
-    if (
-      watchUrlError
-    ) {
+    if (watchError) {
       setSavingShowtime(null);
 
       alert(
-        watchUrlError.message
+        watchError.message
       );
 
       return;
@@ -417,6 +480,7 @@ export default function AdminPage() {
 
     if (error) {
       alert(error.message);
+
       return;
     }
 
@@ -449,6 +513,7 @@ export default function AdminPage() {
 
     if (error) {
       alert(error.message);
+
       return;
     }
 
@@ -481,6 +546,7 @@ export default function AdminPage() {
       alert(
         showtimeError.message
       );
+
       return;
     }
 
@@ -508,6 +574,7 @@ export default function AdminPage() {
       alert(
         screeningError.message
       );
+
       return;
     }
 
@@ -563,34 +630,27 @@ export default function AdminPage() {
       <section className="admin-card">
         <div
           style={{
-            display: "flex",
-            justifyContent:
-              "space-between",
-            alignItems: "center",
-            gap: 16,
             marginBottom: 22,
           }}
         >
-          <div>
-            <div
-              style={{
-                fontSize: 11,
-                letterSpacing: 2.2,
-                opacity: 0.45,
-                marginBottom: 6,
-              }}
-            >
-              NOW BOOKED
-            </div>
-
-            <h2
-              style={{
-                margin: 0,
-              }}
-            >
-              Current Screening
-            </h2>
+          <div
+            style={{
+              fontSize: 11,
+              letterSpacing: 2.2,
+              opacity: 0.45,
+              marginBottom: 6,
+            }}
+          >
+            NOW BOOKED
           </div>
+
+          <h2
+            style={{
+              margin: 0,
+            }}
+          >
+            Current Screening
+          </h2>
         </div>
 
         {scheduledScreenings.length ===
@@ -606,115 +666,176 @@ export default function AdminPage() {
                   screening.id
                 }
                 style={{
-                  display:
-                    "grid",
-                  gridTemplateColumns:
-                    "90px 1fr",
-                  gap: 20,
-                  alignItems:
-                    "start",
-                  padding:
-                    "18px 0 4px",
+                  marginBottom: 28,
                 }}
               >
-                <img
-                  src={
-                    screening.poster_url
-                  }
-                  alt={
-                    screening.movie_title
-                  }
+                <div
                   style={{
-                    width: 90,
-                    aspectRatio:
-                      "2 / 3",
-                    objectFit:
-                      "cover",
-                    borderRadius: 10,
+                    display:
+                      "grid",
+                    gridTemplateColumns:
+                      "90px 1fr",
+                    gap: 20,
+                    alignItems:
+                      "start",
+                    marginBottom: 24,
                   }}
-                />
-
-                <div>
-                  <div
-                    style={{
-                      fontSize: 22,
-                      fontWeight: 650,
-                      marginBottom: 8,
-                    }}
-                  >
-                    {
+                >
+                  <img
+                    src={
+                      screening.poster_url
+                    }
+                    alt={
                       screening.movie_title
                     }
-                  </div>
-
-                  <div
                     style={{
-                      fontSize: 15,
-                      opacity: 0.72,
-                      marginBottom: 8,
+                      width: 90,
+                      aspectRatio:
+                        "2 / 3",
+                      objectFit:
+                        "cover",
+                      borderRadius: 10,
                     }}
-                  >
-                    {
-                      screening.screening_date
-                    }
-                    {" · "}
-                    {screening.screening_time?.slice(
-                      0,
-                      5
-                    )}
-                  </div>
+                  />
 
-                  {screening.watch_url && (
+                  <div>
                     <div
                       style={{
-                        display:
-                          "inline-block",
-                        fontSize: 11,
-                        letterSpacing:
-                          0.5,
-                        opacity: 0.55,
-                        marginBottom: 18,
+                        fontSize: 22,
+                        fontWeight: 650,
+                        marginBottom: 8,
                       }}
                     >
-                      WATCH LINK ADDED ✓
+                      {
+                        screening.movie_title
+                      }
                     </div>
-                  )}
 
+                    <div
+                      style={{
+                        fontSize: 15,
+                        opacity: 0.72,
+                      }}
+                    >
+                      {
+                        screening.screening_date
+                      }
+                      {" · "}
+                      {screening.screening_time?.slice(
+                        0,
+                        5
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* EDIT CURRENT TICKET LINK */}
+
+                <div
+                  style={{
+                    padding: 18,
+                    border:
+                      "1px solid rgba(255,255,255,0.09)",
+                    borderRadius: 12,
+                    background:
+                      "rgba(255,255,255,0.025)",
+                    marginBottom: 18,
+                  }}
+                >
                   <div
                     style={{
-                      display:
-                        "flex",
-                      flexWrap:
-                        "wrap",
-                      gap: 10,
+                      fontSize: 11,
+                      letterSpacing: 1.8,
+                      opacity: 0.5,
+                      marginBottom: 10,
                     }}
                   >
-                    <Link
-                      href="/ticket"
-                      className="secondary"
-                      style={{
-                        display:
-                          "inline-block",
-                        textDecoration:
-                          "none",
-                        padding:
-                          "10px 15px",
-                      }}
-                    >
-                      View Ticket
-                    </Link>
-
-                    <button
-                      className="danger"
-                      onClick={() =>
-                        cancelScreening(
-                          screening
-                        )
-                      }
-                    >
-                      Cancel Screening
-                    </button>
+                    WATCH LINK
                   </div>
+
+                  <input
+                    className="text-input"
+                    type="url"
+                    value={
+                      watchValues[
+                        screening.id
+                      ] ?? ""
+                    }
+                    onChange={(e) =>
+                      setWatchValues({
+                        ...watchValues,
+                        [screening.id]:
+                          e.target
+                            .value,
+                      })
+                    }
+                    placeholder="Paste Baidu, Drive, YouTube, Vimeo..."
+                    style={{
+                      width: "100%",
+                      boxSizing:
+                        "border-box",
+                      marginBottom: 10,
+                    }}
+                  />
+
+                  <button
+                    className="primary"
+                    onClick={() =>
+                      saveWatchUrl(
+                        screening
+                      )
+                    }
+                    disabled={
+                      savingWatchLink ===
+                      screening.id
+                    }
+                    style={{
+                      width: "100%",
+                      padding:
+                        "12px 16px",
+                    }}
+                  >
+                    {savingWatchLink ===
+                    screening.id
+                      ? "Saving…"
+                      : "Save Watch Link"}
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    display:
+                      "flex",
+                    flexWrap:
+                      "wrap",
+                    gap: 10,
+                  }}
+                >
+                  <Link
+                    href="/ticket"
+                    className="secondary"
+                    style={{
+                      display:
+                        "inline-block",
+                      textDecoration:
+                        "none",
+                      padding:
+                        "10px 15px",
+                    }}
+                  >
+                    View Ticket
+                  </Link>
+
+                  <button
+                    className="danger"
+                    onClick={() =>
+                      cancelScreening(
+                        screening
+                      )
+                    }
+                  >
+                    Cancel Screening
+                  </button>
                 </div>
               </div>
             )
@@ -776,7 +897,7 @@ export default function AdminPage() {
                     marginBottom: 20,
                   }}
                 >
-                  {/* MOVIE HERO */}
+                  {/* MOVIE */}
 
                   <div
                     style={{
@@ -839,9 +960,8 @@ export default function AdminPage() {
                           lineHeight: 1.5,
                         }}
                       >
-                        Offer a few possible
-                        screening times for the
-                        guest to choose from.
+                        Offer possible
+                        screening times.
                       </div>
                     </div>
                   </div>
@@ -934,7 +1054,13 @@ export default function AdminPage() {
 
                   <div
                     style={{
-                      marginBottom: 20,
+                      padding: 18,
+                      border:
+                        "1px solid rgba(255,255,255,0.09)",
+                      borderRadius: 12,
+                      background:
+                        "rgba(255,255,255,0.025)",
+                      marginBottom: 18,
                     }}
                   >
                     <label
@@ -954,7 +1080,7 @@ export default function AdminPage() {
                       value={
                         watchValues[
                           screening.id
-                        ] || ""
+                        ] ?? ""
                       }
                       onChange={(e) =>
                         setWatchValues({
@@ -969,23 +1095,35 @@ export default function AdminPage() {
                         width: "100%",
                         boxSizing:
                           "border-box",
+                        marginBottom: 10,
                       }}
                     />
 
-                    <div
+                    <button
+                      className="secondary"
+                      onClick={() =>
+                        saveWatchUrl(
+                          screening
+                        )
+                      }
+                      disabled={
+                        savingWatchLink ===
+                        screening.id
+                      }
                       style={{
-                        fontSize: 11,
-                        opacity: 0.45,
-                        marginTop: 7,
-                        lineHeight: 1.5,
+                        width: "100%",
+                        padding:
+                          "11px 15px",
                       }}
                     >
-                      Optional · This will appear
-                      on the final movie ticket.
-                    </div>
+                      {savingWatchLink ===
+                      screening.id
+                        ? "Saving…"
+                        : "Save Watch Link"}
+                    </button>
                   </div>
 
-                  {/* ADD BUTTON */}
+                  {/* ADD SHOWTIME */}
 
                   <button
                     className="primary"
@@ -1000,7 +1138,8 @@ export default function AdminPage() {
                     }
                     style={{
                       width: "100%",
-                      padding: "15px 20px",
+                      padding:
+                        "15px 20px",
                       fontSize: 15,
                       fontWeight: 650,
                       marginBottom: 28,
@@ -1012,7 +1151,7 @@ export default function AdminPage() {
                       : "+ Add Showtime"}
                   </button>
 
-                  {/* SHOWTIME CARDS */}
+                  {/* OFFERED TIMES */}
 
                   {currentShowtimes.length >
                     0 && (
@@ -1094,10 +1233,6 @@ export default function AdminPage() {
                                       showtime
                                     )
                                   }
-                                  style={{
-                                    padding:
-                                      "8px 12px",
-                                  }}
                                 >
                                   Delete
                                 </button>
