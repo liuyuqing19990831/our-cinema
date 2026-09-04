@@ -30,15 +30,22 @@ export default function HomePage() {
   const router = useRouter();
 
   const [movies, setMovies] = useState<Movie[]>([]);
-  const [screening, setScreening] = useState<Screening | null>(null);
-  const [showtimes, setShowtimes] = useState<Showtime[]>([]);
+  const [screening, setScreening] =
+    useState<Screening | null>(null);
+
+  const [showtimes, setShowtimes] =
+    useState<Showtime[]>([]);
 
   const [loading, setLoading] = useState(true);
-  const [chosenMovie, setChosenMovie] = useState<Movie | null>(null);
+
+  const [chosenMovie, setChosenMovie] =
+    useState<Movie | null>(null);
+
   const [chosenShowtime, setChosenShowtime] =
     useState<Showtime | null>(null);
 
-  const [working, setWorking] = useState(false);
+  const [working, setWorking] =
+    useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -47,34 +54,64 @@ export default function HomePage() {
       .from("movies")
       .select("*")
       .eq("status", "available")
-      .order("created_at", { ascending: true });
+      .order("created_at", {
+        ascending: true,
+      });
 
-    setMovies((movieData ?? []) as Movie[]);
+    setMovies(
+      (movieData ?? []) as Movie[]
+    );
 
-    const { data: screeningData } = await supabase
-      .from("screenings")
-      .select("*")
-      .eq("status", "waiting_schedule")
-      .order("created_at", { ascending: false })
-      .limit(1);
+    const { data: screeningData } =
+      await supabase
+        .from("screenings")
+        .select("*")
+        .eq(
+          "status",
+          "waiting_schedule"
+        )
+        .order("created_at", {
+          ascending: false,
+        })
+        .limit(1);
 
     const currentScreening =
-      screeningData && screeningData.length > 0
+      screeningData &&
+      screeningData.length > 0
         ? (screeningData[0] as Screening)
         : null;
 
     setScreening(currentScreening);
 
     if (currentScreening) {
-      const { data: showtimeData } = await supabase
-        .from("showtimes")
-        .select("*")
-        .eq("screening_id", currentScreening.id)
-        .eq("status", "available")
-        .order("screening_date", { ascending: true })
-        .order("screening_time", { ascending: true });
+      const { data: showtimeData } =
+        await supabase
+          .from("showtimes")
+          .select("*")
+          .eq(
+            "screening_id",
+            currentScreening.id
+          )
+          .eq(
+            "status",
+            "available"
+          )
+          .order(
+            "screening_date",
+            {
+              ascending: true,
+            }
+          )
+          .order(
+            "screening_time",
+            {
+              ascending: true,
+            }
+          );
 
-      setShowtimes((showtimeData ?? []) as Showtime[]);
+      setShowtimes(
+        (showtimeData ?? []) as Showtime[]
+      );
     } else {
       setShowtimes([]);
     }
@@ -85,49 +122,66 @@ export default function HomePage() {
   useEffect(() => {
     loadData();
 
-    const movieChannel = supabase
-      .channel("guest-movies-live")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "movies",
-        },
-        loadData
-      )
-      .subscribe();
+    const movieChannel =
+      supabase
+        .channel(
+          "guest-movies-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "movies",
+          },
+          loadData
+        )
+        .subscribe();
 
-    const screeningChannel = supabase
-      .channel("guest-screenings-live")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "screenings",
-        },
-        loadData
-      )
-      .subscribe();
+    const screeningChannel =
+      supabase
+        .channel(
+          "guest-screenings-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "screenings",
+          },
+          loadData
+        )
+        .subscribe();
 
-    const showtimeChannel = supabase
-      .channel("guest-showtimes-live")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "showtimes",
-        },
-        loadData
-      )
-      .subscribe();
+    const showtimeChannel =
+      supabase
+        .channel(
+          "guest-showtimes-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "showtimes",
+          },
+          loadData
+        )
+        .subscribe();
 
     return () => {
-      supabase.removeChannel(movieChannel);
-      supabase.removeChannel(screeningChannel);
-      supabase.removeChannel(showtimeChannel);
+      supabase.removeChannel(
+        movieChannel
+      );
+
+      supabase.removeChannel(
+        screeningChannel
+      );
+
+      supabase.removeChannel(
+        showtimeChannel
+      );
     };
   }, []);
 
@@ -135,35 +189,53 @@ export default function HomePage() {
     if (!movies.length) return;
 
     setChosenMovie(
-      movies[Math.floor(Math.random() * movies.length)]
+      movies[
+        Math.floor(
+          Math.random() *
+            movies.length
+        )
+      ]
     );
   }
 
-  async function confirmMovie(movie: Movie) {
+  async function confirmMovie(
+    movie: Movie
+  ) {
     setWorking(true);
 
-    const { error: screeningError } = await supabase
+    const {
+      error: screeningError,
+    } = await supabase
       .from("screenings")
       .insert({
         movie_id: movie.id,
         movie_title: movie.title,
-        poster_url: movie.poster_url,
-        status: "waiting_schedule",
+        poster_url:
+          movie.poster_url,
+        status:
+          "waiting_schedule",
       });
 
     if (screeningError) {
       setWorking(false);
-      alert(screeningError.message);
+      alert(
+        screeningError.message
+      );
       return;
     }
 
-    const { error: movieError } = await supabase
+    const {
+      error: movieError,
+    } = await supabase
       .from("movies")
       .update({
         status: "selected",
       })
       .eq("id", movie.id)
-      .eq("status", "available");
+      .eq(
+        "status",
+        "available"
+      );
 
     setWorking(false);
 
@@ -173,41 +245,63 @@ export default function HomePage() {
     }
 
     setChosenMovie(null);
+
     await loadData();
   }
 
-  async function confirmShowtime(showtime: Showtime) {
+  async function confirmShowtime(
+    showtime: Showtime
+  ) {
     if (!screening) return;
 
     setWorking(true);
 
-    const { error: showtimeError } = await supabase
+    const {
+      error: showtimeError,
+    } = await supabase
       .from("showtimes")
       .update({
         status: "selected",
       })
-      .eq("id", showtime.id)
-      .eq("status", "available");
+      .eq(
+        "id",
+        showtime.id
+      )
+      .eq(
+        "status",
+        "available"
+      );
 
     if (showtimeError) {
       setWorking(false);
-      alert(showtimeError.message);
+      alert(
+        showtimeError.message
+      );
       return;
     }
 
-    const { error: screeningError } = await supabase
+    const {
+      error: screeningError,
+    } = await supabase
       .from("screenings")
       .update({
         status: "scheduled",
-        screening_date: showtime.screening_date,
-        screening_time: showtime.screening_time,
+        screening_date:
+          showtime.screening_date,
+        screening_time:
+          showtime.screening_time,
       })
-      .eq("id", screening.id);
+      .eq(
+        "id",
+        screening.id
+      );
 
     setWorking(false);
 
     if (screeningError) {
-      alert(screeningError.message);
+      alert(
+        screeningError.message
+      );
       return;
     }
 
@@ -216,61 +310,69 @@ export default function HomePage() {
     router.push("/ticket");
   }
 
-  function formatDate(date: string) {
-    const parts = date.split("-");
+  function formatDate(
+    date: string
+  ) {
+    const parts =
+      date.split("-");
 
-    if (parts.length !== 3) return date;
+    if (
+      parts.length !== 3
+    ) {
+      return date;
+    }
 
-    const year = Number(parts[0]);
-    const month = Number(parts[1]);
-    const day = Number(parts[2]);
+    const year =
+      Number(parts[0]);
 
-    return new Intl.DateTimeFormat("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }).format(
+    const month =
+      Number(parts[1]);
+
+    const day =
+      Number(parts[2]);
+
+    return new Intl.DateTimeFormat(
+      "en-US",
+      {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }
+    ).format(
       new Date(
-        Date.UTC(year, month - 1, day)
+        Date.UTC(
+          year,
+          month - 1,
+          day
+        )
       )
     );
   }
 
-  function HeaderActions() {
+  function Header() {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-        }}
-      >
-        <Link
-          href="/admin"
-          style={{
-            color: "inherit",
-            textDecoration: "none",
-            fontSize: 12,
-            opacity: 0.38,
-            letterSpacing: 0.5,
-          }}
-        >
-          Admin
-        </Link>
+      <header className="header">
+        <div>
+          <h1 className="brand">
+            OUR CINEMA
+          </h1>
 
-        <Link
-          href="/ticket"
-          className="primary"
-          style={{
-            display: "inline-block",
-            textDecoration: "none",
-            padding: "9px 14px",
-            fontSize: 13,
-          }}
-        >
-          Ticket
-        </Link>
-      </div>
+          <Link
+            href="/ticket"
+            style={{
+              display: "inline-block",
+              marginTop: 5,
+              color: "inherit",
+              textDecoration: "none",
+              fontSize: 14,
+              opacity: 0.75,
+              letterSpacing: 0.5,
+            }}
+          >
+            View Ticket →
+          </Link>
+        </div>
+      </header>
     );
   }
 
@@ -291,19 +393,7 @@ export default function HomePage() {
   if (screening) {
     return (
       <main className="shell">
-        <header className="header">
-          <div>
-            <h1 className="brand">
-              OUR CINEMA
-            </h1>
-
-            <div className="subtitle">
-              Choose a Showtime
-            </div>
-          </div>
-
-          <HeaderActions />
-        </header>
+        <Header />
 
         <section
           className="admin-card"
@@ -311,9 +401,24 @@ export default function HomePage() {
             textAlign: "center",
           }}
         >
+          <div
+            style={{
+              fontSize: 12,
+              letterSpacing: 2,
+              opacity: 0.5,
+              marginBottom: 16,
+            }}
+          >
+            CHOOSE A SHOWTIME
+          </div>
+
           <img
-            src={screening.poster_url}
-            alt={screening.movie_title}
+            src={
+              screening.poster_url
+            }
+            alt={
+              screening.movie_title
+            }
             style={{
               width: 150,
               borderRadius: 8,
@@ -322,17 +427,21 @@ export default function HomePage() {
           />
 
           <h2>
-            {screening.movie_title}
+            {
+              screening.movie_title
+            }
           </h2>
 
-          {showtimes.length === 0 ? (
+          {showtimes.length ===
+          0 ? (
             <div
               className="status"
               style={{
                 marginTop: 20,
               }}
             >
-              Waiting for showtimes…
+              Waiting for
+              showtimes…
             </div>
           ) : (
             <div
@@ -342,28 +451,34 @@ export default function HomePage() {
                 gap: 12,
               }}
             >
-              {showtimes.map((showtime) => (
-                <button
-                  key={showtime.id}
-                  className="secondary"
-                  style={{
-                    padding: 16,
-                    fontSize: 16,
-                  }}
-                  onClick={() =>
-                    setChosenShowtime(showtime)
-                  }
-                >
-                  {formatDate(
-                    showtime.screening_date
-                  )}
-                  {" · "}
-                  {showtime.screening_time.slice(
-                    0,
-                    5
-                  )}
-                </button>
-              ))}
+              {showtimes.map(
+                (showtime) => (
+                  <button
+                    key={
+                      showtime.id
+                    }
+                    className="secondary"
+                    style={{
+                      padding: 16,
+                      fontSize: 16,
+                    }}
+                    onClick={() =>
+                      setChosenShowtime(
+                        showtime
+                      )
+                    }
+                  >
+                    {formatDate(
+                      showtime.screening_date
+                    )}
+                    {" · "}
+                    {showtime.screening_time.slice(
+                      0,
+                      5
+                    )}
+                  </button>
+                )
+              )}
             </div>
           )}
         </section>
@@ -372,7 +487,9 @@ export default function HomePage() {
           <div
             className="modal-backdrop"
             onClick={() =>
-              setChosenShowtime(null)
+              setChosenShowtime(
+                null
+              )
             }
           >
             <div
@@ -399,7 +516,9 @@ export default function HomePage() {
               <div className="modal-actions">
                 <button
                   className="primary"
-                  disabled={working}
+                  disabled={
+                    working
+                  }
                   onClick={() =>
                     confirmShowtime(
                       chosenShowtime
@@ -414,7 +533,9 @@ export default function HomePage() {
                 <button
                   className="secondary"
                   onClick={() =>
-                    setChosenShowtime(null)
+                    setChosenShowtime(
+                      null
+                    )
                   }
                 >
                   Cancel
@@ -432,48 +553,49 @@ export default function HomePage() {
   */
   return (
     <main className="shell">
-      <header className="header">
-        <div>
-          <h1 className="brand">
-            OUR CINEMA
-          </h1>
-
-          <div className="subtitle">
-            Tonight&apos;s Selection
-          </div>
-        </div>
-
-        <HeaderActions />
-      </header>
+      <Header />
 
       <section className="movie-grid">
         {movies.length === 0 ? (
           <div className="empty">
-            No available movies yet.
+            No available movies
+            yet.
           </div>
         ) : (
-          movies.map((movie) => (
-            <article key={movie.id}>
-              <img
-                className="poster"
-                src={movie.poster_url}
-                alt={movie.title}
-              />
-
-              <div className="movie-title">
-                {movie.title}
-              </div>
-
-              <button
-                className="pick-button"
-                onClick={() =>
-                  setChosenMovie(movie)
-                }
+          movies.map(
+            (movie) => (
+              <article
+                key={movie.id}
               >
-                Choose
-              </button>
-            </article>
-          ))
+                <img
+                  className="poster"
+                  src={
+                    movie.poster_url
+                  }
+                  alt={
+                    movie.title
+                  }
+                />
+
+                <div className="movie-title">
+                  {
+                    movie.title
+                  }
+                </div>
+
+                <button
+                  className="pick-button"
+                  onClick={() =>
+                    setChosenMovie(
+                      movie
+                    )
+                  }
+                >
+                  Choose
+                </button>
+              </article>
+            )
+          )
         )}
       </section>
 
@@ -481,7 +603,9 @@ export default function HomePage() {
         <button
           className="primary"
           onClick={randomPick}
-          disabled={!movies.length}
+          disabled={
+            !movies.length
+          }
         >
           Random Pick
         </button>
@@ -501,12 +625,18 @@ export default function HomePage() {
             }
           >
             <img
-              src={chosenMovie.poster_url}
-              alt={chosenMovie.title}
+              src={
+                chosenMovie.poster_url
+              }
+              alt={
+                chosenMovie.title
+              }
             />
 
             <h3>
-              {chosenMovie.title}
+              {
+                chosenMovie.title
+              }
             </h3>
 
             <p>
@@ -516,9 +646,13 @@ export default function HomePage() {
             <div className="modal-actions">
               <button
                 className="primary"
-                disabled={working}
+                disabled={
+                  working
+                }
                 onClick={() =>
-                  confirmMovie(chosenMovie)
+                  confirmMovie(
+                    chosenMovie
+                  )
                 }
               >
                 {working
@@ -529,7 +663,9 @@ export default function HomePage() {
               <button
                 className="secondary"
                 onClick={() =>
-                  setChosenMovie(null)
+                  setChosenMovie(
+                    null
+                  )
                 }
               >
                 Cancel
