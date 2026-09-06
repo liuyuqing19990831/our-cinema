@@ -16,6 +16,7 @@ type Screening = {
   movie_title: string;
   poster_url: string;
   status: string;
+
   screening_date: string | null;
   screening_time: string | null;
 
@@ -26,6 +27,7 @@ type Screening = {
 
   niu_rating: number | null;
   xia_rating: number | null;
+
   niu_rated_at: string | null;
   xia_rated_at: string | null;
 
@@ -35,10 +37,18 @@ type Screening = {
 type Showtime = {
   id: number;
   created_at: string;
+
   screening_id: number;
+
   screening_date: string;
   screening_time: string;
+
   status: string;
+};
+
+type ShowtimeChoice = {
+  screening: Screening;
+  showtime: Showtime;
 };
 
 export default function HomePage() {
@@ -47,11 +57,25 @@ export default function HomePage() {
   const [movies, setMovies] =
     useState<Movie[]>([]);
 
-  const [screening, setScreening] =
-    useState<Screening | null>(null);
+  /*
+    所有还在等待用户
+    选择时间的电影
+  */
+  const [
+    screenings,
+    setScreenings,
+  ] = useState<Screening[]>([]);
 
-  const [showtimes, setShowtimes] =
-    useState<Showtime[]>([]);
+  /*
+    每一部 screening
+    都有自己的 showtimes
+  */
+  const [
+    showtimesByScreening,
+    setShowtimesByScreening,
+  ] = useState<
+    Record<number, Showtime[]>
+  >({});
 
   const [loading, setLoading] =
     useState(true);
@@ -59,16 +83,15 @@ export default function HomePage() {
   const [
     chosenMovie,
     setChosenMovie,
-  ] =
-    useState<Movie | null>(
-      null
-    );
+  ] = useState<Movie | null>(
+    null
+  );
 
   const [
     chosenShowtime,
     setChosenShowtime,
   ] =
-    useState<Showtime | null>(
+    useState<ShowtimeChoice | null>(
       null
     );
 
@@ -106,8 +129,7 @@ export default function HomePage() {
   const [
     savingRating,
     setSavingRating,
-  ] =
-    useState(false);
+  ] = useState(false);
 
   /*
     LOAD HOME PAGE
@@ -130,9 +152,12 @@ export default function HomePage() {
         "status",
         "available"
       )
-      .order("created_at", {
-        ascending: true,
-      });
+      .order(
+        "created_at",
+        {
+          ascending: true,
+        }
+      );
 
     if (movieError) {
       console.error(
@@ -141,12 +166,13 @@ export default function HomePage() {
     }
 
     setMovies(
-      (movieData ?? []) as Movie[]
+      (movieData ??
+        []) as Movie[]
     );
 
     /*
-      MOVIE WAITING FOR
-      GUEST TO CHOOSE A TIME
+      LOAD ALL MOVIES
+      WAITING FOR SCHEDULE
     */
 
     const {
@@ -161,10 +187,12 @@ export default function HomePage() {
         "status",
         "waiting_schedule"
       )
-      .order("created_at", {
-        ascending: false,
-      })
-      .limit(1);
+      .order(
+        "created_at",
+        {
+          ascending: true,
+        }
+      );
 
     if (
       screeningError
@@ -172,76 +200,145 @@ export default function HomePage() {
       console.error(
         screeningError
       );
+
+      setScreenings(
+        []
+      );
+
+      setShowtimesByScreening(
+        {}
+      );
+
+      setLoading(false);
+
+      return;
     }
 
-    const currentScreening =
-      screeningData &&
-      screeningData.length > 0
-        ? (screeningData[0] as Screening)
-        : null;
+    const waitingScreenings =
+      (screeningData ??
+        []) as Screening[];
 
-    setScreening(
-      currentScreening
+    setScreenings(
+      waitingScreenings
     );
 
     /*
-      SHOWTIMES FOR
-      CURRENT SCREENING
+      LOAD SHOWTIMES FOR
+      ALL WAITING MOVIES
     */
 
     if (
-      currentScreening
+      waitingScreenings.length ===
+      0
     ) {
-      const {
-        data:
-          showtimeData,
-        error:
-          showtimeError,
-      } = await supabase
-        .from("showtimes")
-        .select("*")
-        .eq(
-          "screening_id",
-          currentScreening.id
-        )
-        .eq(
-          "status",
-          "available"
-        )
-        .order(
-          "screening_date",
-          {
-            ascending: true,
-          }
-        )
-        .order(
-          "screening_time",
-          {
-            ascending: true,
-          }
-        );
+      setShowtimesByScreening(
+        {}
+      );
 
-      if (
+      setLoading(false);
+
+      return;
+    }
+
+    const screeningIds =
+      waitingScreenings.map(
+        (item) => item.id
+      );
+
+    const {
+      data:
+        showtimeData,
+      error:
+        showtimeError,
+    } = await supabase
+      .from("showtimes")
+      .select("*")
+      .in(
+        "screening_id",
+        screeningIds
+      )
+      .eq(
+        "status",
+        "available"
+      )
+      .order(
+        "screening_date",
+        {
+          ascending: true,
+        }
+      )
+      .order(
+        "screening_time",
+        {
+          ascending: true,
+        }
+      );
+
+    if (
+      showtimeError
+    ) {
+      console.error(
         showtimeError
-      ) {
-        console.error(
-          showtimeError
+      );
+
+      setShowtimesByScreening(
+        {}
+      );
+
+      setLoading(false);
+
+      return;
+    }
+
+    const grouped:
+      Record<
+        number,
+        Showtime[]
+      > = {};
+
+    waitingScreenings.forEach(
+      (item) => {
+        grouped[
+          item.id
+        ] = [];
+      }
+    );
+
+    (
+      (showtimeData ??
+        []) as Showtime[]
+    ).forEach(
+      (showtime) => {
+        if (
+          !grouped[
+            showtime
+              .screening_id
+          ]
+        ) {
+          grouped[
+            showtime
+              .screening_id
+          ] = [];
+        }
+
+        grouped[
+          showtime
+            .screening_id
+        ].push(
+          showtime
         );
       }
+    );
 
-      setShowtimes(
-        (showtimeData ??
-          []) as Showtime[]
-      );
-    } else {
-      setShowtimes([]);
-    }
+    setShowtimesByScreening(
+      grouped
+    );
 
     setLoading(false);
   }
 
   /*
-    CHECK FOR ONE-TIME
+    CHECK ONE-TIME
     RATING POPUP
   */
 
@@ -284,7 +381,10 @@ export default function HomePage() {
       );
 
     if (error) {
-      console.error(error);
+      console.error(
+        error
+      );
+
       return;
     }
 
@@ -293,7 +393,8 @@ export default function HomePage() {
 
     const pastScreening =
       (
-        (data ?? []) as Screening[]
+        (data ??
+          []) as Screening[]
       ).find(
         (item) => {
           if (
@@ -322,8 +423,7 @@ export default function HomePage() {
     }
 
     /*
-      MARK AS SHOWN FIRST,
-      SO POPUP ONLY APPEARS ONCE
+      MARK AS SHOWN FIRST
     */
 
     const {
@@ -346,6 +446,7 @@ export default function HomePage() {
       console.error(
         updateError
       );
+
       return;
     }
 
@@ -365,6 +466,7 @@ export default function HomePage() {
   useEffect(() => {
     async function initialize() {
       await loadData();
+
       await checkRatingPrompt();
     }
 
@@ -379,8 +481,10 @@ export default function HomePage() {
           "postgres_changes",
           {
             event: "*",
-            schema: "public",
-            table: "movies",
+            schema:
+              "public",
+            table:
+              "movies",
           },
           () =>
             loadData()
@@ -396,7 +500,8 @@ export default function HomePage() {
           "postgres_changes",
           {
             event: "*",
-            schema: "public",
+            schema:
+              "public",
             table:
               "screenings",
           },
@@ -414,7 +519,8 @@ export default function HomePage() {
           "postgres_changes",
           {
             event: "*",
-            schema: "public",
+            schema:
+              "public",
             table:
               "showtimes",
           },
@@ -444,7 +550,8 @@ export default function HomePage() {
 
   function randomPick() {
     if (
-      movies.length === 0
+      movies.length ===
+      0
     ) {
       return;
     }
@@ -506,8 +613,8 @@ export default function HomePage() {
     }
 
     /*
-      REMOVE MOVIE
-      FROM NORMAL POOL
+      REMOVE FROM
+      AVAILABLE POOL
     */
 
     const {
@@ -530,10 +637,13 @@ export default function HomePage() {
 
     setWorking(false);
 
-    if (movieError) {
+    if (
+      movieError
+    ) {
       alert(
         movieError.message
       );
+
       return;
     }
 
@@ -549,17 +659,16 @@ export default function HomePage() {
   */
 
   async function confirmShowtime(
-    showtime: Showtime
+    screening:
+      Screening,
+    showtime:
+      Showtime
   ) {
-    if (!screening) {
-      return;
-    }
-
     setWorking(true);
 
     /*
-      MARK THIS SHOWTIME
-      AS SELECTED
+      MARK CHOSEN
+      SHOWTIME SELECTED
     */
 
     const {
@@ -593,8 +702,8 @@ export default function HomePage() {
     }
 
     /*
-      CANCEL OTHER OFFERED
-      SHOWTIMES
+      CANCEL OTHER TIMES
+      FOR THIS MOVIE ONLY
     */
 
     await supabase
@@ -618,6 +727,7 @@ export default function HomePage() {
 
     /*
       CREATE TICKET
+      FOR THIS MOVIE ONLY
     */
 
     const {
@@ -651,6 +761,7 @@ export default function HomePage() {
       alert(
         screeningError.message
       );
+
       return;
     }
 
@@ -677,13 +788,15 @@ export default function HomePage() {
       person === "niu"
     ) {
       setNiuRating(
-        niuRating === value
+        niuRating ===
+          value
           ? null
           : value
       );
     } else {
       setXiaRating(
-        xiaRating === value
+        xiaRating ===
+          value
           ? null
           : value
       );
@@ -704,37 +817,41 @@ export default function HomePage() {
     const now =
       new Date().toISOString();
 
-    const { error } =
-      await supabase
-        .from("screenings")
-        .update({
-          niu_rating:
-            niuRating,
+    const {
+      error,
+    } = await supabase
+      .from("screenings")
+      .update({
+        niu_rating:
+          niuRating,
 
-          xia_rating:
-            xiaRating,
+        xia_rating:
+          xiaRating,
 
-          niu_rated_at:
-            niuRating
-              ? now
-              : null,
+        niu_rated_at:
+          niuRating
+            ? now
+            : null,
 
-          xia_rated_at:
-            xiaRating
-              ? now
-              : null,
-        })
-        .eq(
-          "id",
-          ratingScreening.id
-        );
+        xia_rated_at:
+          xiaRating
+            ? now
+            : null,
+      })
+      .eq(
+        "id",
+        ratingScreening.id
+      );
 
     setSavingRating(
       false
     );
 
     if (error) {
-      alert(error.message);
+      alert(
+        error.message
+      );
+
       return;
     }
 
@@ -768,26 +885,38 @@ export default function HomePage() {
       date.split("-");
 
     if (
-      parts.length !== 3
+      parts.length !==
+      3
     ) {
       return date;
     }
 
     const year =
-      Number(parts[0]);
+      Number(
+        parts[0]
+      );
 
     const month =
-      Number(parts[1]);
+      Number(
+        parts[1]
+      );
 
     const day =
-      Number(parts[2]);
+      Number(
+        parts[2]
+      );
 
     return new Intl.DateTimeFormat(
       "en-US",
       {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
+        month:
+          "short",
+
+        day:
+          "numeric",
+
+        year:
+          "numeric",
       }
     ).format(
       new Date(
@@ -811,14 +940,17 @@ export default function HomePage() {
         style={{
           alignItems:
             "center",
-          gap: 18,
+
+          gap:
+            18,
         }}
       >
         <div>
           <h1
             className="brand"
             style={{
-              marginBottom: 4,
+              marginBottom:
+                4,
             }}
           >
             OUR CINEMA
@@ -831,9 +963,15 @@ export default function HomePage() {
 
         <div
           style={{
-            display: "flex",
-            gap: 9,
-            flexWrap: "wrap",
+            display:
+              "flex",
+
+            gap:
+              9,
+
+            flexWrap:
+              "wrap",
+
             justifyContent:
               "flex-end",
           }}
@@ -844,14 +982,22 @@ export default function HomePage() {
             style={{
               display:
                 "inline-flex",
+
               alignItems:
                 "center",
+
               textDecoration:
                 "none",
+
               padding:
                 "10px 15px",
-              fontSize: 13,
-              fontWeight: 600,
+
+              fontSize:
+                13,
+
+              fontWeight:
+                600,
+
               whiteSpace:
                 "nowrap",
             }}
@@ -865,14 +1011,22 @@ export default function HomePage() {
             style={{
               display:
                 "inline-flex",
+
               alignItems:
                 "center",
+
               textDecoration:
                 "none",
+
               padding:
                 "10px 15px",
-              fontSize: 13,
-              fontWeight: 600,
+
+              fontSize:
+                13,
+
+              fontWeight:
+                600,
+
               whiteSpace:
                 "nowrap",
             }}
@@ -886,14 +1040,22 @@ export default function HomePage() {
             style={{
               display:
                 "inline-flex",
+
               alignItems:
                 "center",
+
               textDecoration:
                 "none",
+
               padding:
                 "10px 15px",
-              fontSize: 13,
-              fontWeight: 600,
+
+              fontSize:
+                13,
+
+              fontWeight:
+                600,
+
               whiteSpace:
                 "nowrap",
             }}
@@ -915,16 +1077,21 @@ export default function HomePage() {
     rating,
   }: {
     label: string;
+
     person:
       | "niu"
       | "xia";
-    rating: number | null;
+
+    rating:
+      | number
+      | null;
   }) {
     return (
       <div
         style={{
           padding:
             "17px 0",
+
           borderTop:
             "1px solid rgba(255,255,255,0.08)",
         }}
@@ -933,17 +1100,24 @@ export default function HomePage() {
           style={{
             display:
               "flex",
+
             justifyContent:
               "space-between",
+
             alignItems:
               "center",
-            marginBottom: 12,
+
+            marginBottom:
+              12,
           }}
         >
           <div
             style={{
-              fontSize: 16,
-              fontWeight: 650,
+              fontSize:
+                16,
+
+              fontWeight:
+                650,
             }}
           >
             {label}
@@ -951,8 +1125,11 @@ export default function HomePage() {
 
           <div
             style={{
-              fontSize: 12,
-              opacity: 0.45,
+              fontSize:
+                12,
+
+              opacity:
+                0.45,
             }}
           >
             {rating
@@ -963,16 +1140,31 @@ export default function HomePage() {
 
         <div
           style={{
-            display: "flex",
-            justifyContent:
-              "center",
-            gap: 8,
+            display:
+              "grid",
+
+            gridTemplateColumns:
+              "repeat(5, 1fr)",
+
+            gap:
+              4,
+
+            width:
+              "100%",
+
+            maxWidth:
+              180,
+
+            margin:
+              "0 auto",
           }}
         >
           {[1, 2, 3, 4, 5].map(
             (star) => (
               <button
-                key={star}
+                key={
+                  star
+                }
                 type="button"
                 onClick={() =>
                   chooseRating(
@@ -981,17 +1173,31 @@ export default function HomePage() {
                   )
                 }
                 style={{
-                  border: "none",
+                  border:
+                    "none",
+
                   background:
                     "transparent",
-                  padding: 0,
+
+                  padding:
+                    0,
+
                   cursor:
                     "pointer",
-                  fontSize: 32,
-                  lineHeight: 1,
+
+                  fontSize:
+                    22,
+
+                  lineHeight:
+                    1,
+
+                  width:
+                    "100%",
+
                   color:
                     rating &&
-                    star <= rating
+                    star <=
+                      rating
                       ? "inherit"
                       : "rgba(255,255,255,0.20)",
                 }}
@@ -1004,10 +1210,6 @@ export default function HomePage() {
       </div>
     );
   }
-
-  /*
-    LOADING
-  */
 
   if (loading) {
     return (
@@ -1024,285 +1226,442 @@ export default function HomePage() {
       <Header />
 
       {/*
-        IF A MOVIE HAS ALREADY
-        BEEN SELECTED,
-        SHOW SCHEDULING AREA
+        ALL SELECTED FILMS
+        WAITING FOR SCHEDULE
       */}
 
-      {screening ? (
-        <section className="admin-card">
+      {screenings.length >
+        0 && (
+        <div
+          style={{
+            marginBottom:
+              34,
+          }}
+        >
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns:
-                "110px 1fr",
-              gap: 22,
-              alignItems:
-                "center",
-              marginBottom: 28,
+              marginBottom:
+                18,
             }}
           >
-            <img
-              src={
-                screening.poster_url
-              }
-              alt={
-                screening.movie_title
-              }
+            <div
               style={{
-                width: 110,
-                aspectRatio:
-                  "2 / 3",
-                objectFit:
-                  "cover",
-                borderRadius: 12,
+                fontSize:
+                  10,
+
+                letterSpacing:
+                  2.4,
+
+                opacity:
+                  0.4,
+
+                marginBottom:
+                  6,
               }}
-            />
-
-            <div>
-              <div
-                style={{
-                  fontSize: 10,
-                  letterSpacing: 2.2,
-                  opacity: 0.42,
-                  marginBottom: 8,
-                }}
-              >
-                SELECTED FILM
-              </div>
-
-              <h2
-                style={{
-                  fontSize: 28,
-                  lineHeight: 1.1,
-                  margin:
-                    "0 0 10px",
-                }}
-              >
-                {
-                  screening.movie_title
-                }
-              </h2>
-
-              <div
-                style={{
-                  fontSize: 13,
-                  opacity: 0.52,
-                  lineHeight: 1.6,
-                }}
-              >
-                Choose a screening
-                time.
-              </div>
+            >
+              SELECTED FILMS
             </div>
+
+            <h2
+              style={{
+                margin:
+                  0,
+
+                fontSize:
+                  25,
+              }}
+            >
+              Choose a Showtime
+            </h2>
           </div>
 
-          {showtimes.length ===
-          0 ? (
-            <div
-              className="status"
-              style={{
-                textAlign:
-                  "center",
-                padding:
-                  "20px 0 6px",
-              }}
-            >
-              Waiting for showtimes…
-            </div>
-          ) : (
-            <div
-              style={{
-                display:
-                  "grid",
-                gap: 12,
-              }}
-            >
-              {showtimes.map(
-                (showtime) => (
-                  <button
+          <div
+            style={{
+              display:
+                "grid",
+
+              gap:
+                18,
+            }}
+          >
+            {screenings.map(
+              (
+                screening
+              ) => {
+                const showtimes =
+                  showtimesByScreening[
+                    screening.id
+                  ] ?? [];
+
+                return (
+                  <section
                     key={
-                      showtime.id
+                      screening.id
                     }
-                    className="secondary"
-                    onClick={() =>
-                      setChosenShowtime(
-                        showtime
-                      )
-                    }
+                    className="admin-card"
                     style={{
-                      width: "100%",
-                      padding:
-                        "16px 18px",
-                      textAlign:
-                        "left",
-                      display:
-                        "flex",
-                      justifyContent:
-                        "space-between",
-                      alignItems:
-                        "center",
-                      gap: 16,
+                      marginBottom:
+                        0,
                     }}
                   >
-                    <span>
-                      {formatDate(
-                        showtime.screening_date
-                      )}
-                    </span>
-
-                    <strong
+                    <div
                       style={{
-                        fontSize: 17,
+                        display:
+                          "grid",
+
+                        gridTemplateColumns:
+                          "90px minmax(0, 1fr)",
+
+                        gap:
+                          18,
+
+                        alignItems:
+                          "center",
+
+                        marginBottom:
+                          showtimes.length >
+                          0
+                            ? 22
+                            : 0,
                       }}
                     >
-                      {showtime.screening_time.slice(
-                        0,
-                        5
-                      )}
-                    </strong>
-                  </button>
-                )
-              )}
-            </div>
-          )}
-        </section>
-      ) : (
-        <>
-          {/*
-            NORMAL PERMANENT
-            MOVIE POOL
-          */}
+                      <img
+                        src={
+                          screening.poster_url
+                        }
+                        alt={
+                          screening.movie_title
+                        }
+                        style={{
+                          width:
+                            90,
+
+                          aspectRatio:
+                            "2 / 3",
+
+                          objectFit:
+                            "cover",
+
+                          borderRadius:
+                            10,
+                        }}
+                      />
+
+                      <div
+                        style={{
+                          minWidth:
+                            0,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize:
+                              10,
+
+                            letterSpacing:
+                              2,
+
+                            opacity:
+                              0.42,
+
+                            marginBottom:
+                              7,
+                          }}
+                        >
+                          SELECTED FILM
+                        </div>
+
+                        <h2
+                          style={{
+                            fontSize:
+                              23,
+
+                            lineHeight:
+                              1.15,
+
+                            margin:
+                              "0 0 9px",
+                          }}
+                        >
+                          {
+                            screening.movie_title
+                          }
+                        </h2>
+
+                        <div
+                          style={{
+                            fontSize:
+                              12,
+
+                            opacity:
+                              0.5,
+
+                            lineHeight:
+                              1.5,
+                          }}
+                        >
+                          {showtimes.length ===
+                          0
+                            ? "Waiting for schedule…"
+                            : "Showtimes are ready. Choose one below."}
+                        </div>
+                      </div>
+                    </div>
+
+                    {showtimes.length ===
+                    0 ? (
+                      <div
+                        className="status"
+                        style={{
+                          textAlign:
+                            "center",
+
+                          padding:
+                            "18px 0 4px",
+                        }}
+                      >
+                        Waiting for showtimes…
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display:
+                            "grid",
+
+                          gap:
+                            10,
+                        }}
+                      >
+                        {showtimes.map(
+                          (
+                            showtime
+                          ) => (
+                            <button
+                              key={
+                                showtime.id
+                              }
+                              className="secondary"
+                              onClick={() =>
+                                setChosenShowtime(
+                                  {
+                                    screening,
+
+                                    showtime,
+                                  }
+                                )
+                              }
+                              style={{
+                                width:
+                                  "100%",
+
+                                padding:
+                                  "15px 17px",
+
+                                textAlign:
+                                  "left",
+
+                                display:
+                                  "flex",
+
+                                justifyContent:
+                                  "space-between",
+
+                                alignItems:
+                                  "center",
+
+                                gap:
+                                  16,
+                              }}
+                            >
+                              <span>
+                                {formatDate(
+                                  showtime.screening_date
+                                )}
+                              </span>
+
+                              <strong
+                                style={{
+                                  fontSize:
+                                    17,
+                                }}
+                              >
+                                {showtime.screening_time.slice(
+                                  0,
+                                  5
+                                )}
+                              </strong>
+                            </button>
+                          )
+                        )}
+                      </div>
+                    )}
+                  </section>
+                );
+              }
+            )}
+          </div>
+        </div>
+      )}
+
+      {/*
+        NORMAL PERMANENT
+        MOVIE POOL
+      */}
+
+      <div
+        style={{
+          display:
+            "flex",
+
+          justifyContent:
+            "space-between",
+
+          alignItems:
+            "flex-end",
+
+          gap:
+            18,
+
+          marginBottom:
+            20,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize:
+                10,
+
+              letterSpacing:
+                2.4,
+
+              opacity:
+                0.4,
+
+              marginBottom:
+                6,
+            }}
+          >
+            NOW AVAILABLE
+          </div>
+
+          <h2
+            style={{
+              margin:
+                0,
+
+              fontSize:
+                25,
+            }}
+          >
+            Pick a Movie
+          </h2>
+        </div>
+
+        {movies.length >
+          0 && (
+          <button
+            className="primary"
+            onClick={
+              randomPick
+            }
+            style={{
+              padding:
+                "11px 17px",
+
+              whiteSpace:
+                "nowrap",
+            }}
+          >
+            ✦ Random Pick
+          </button>
+        )}
+      </div>
+
+      {movies.length ===
+      0 ? (
+        <section
+          className="admin-card"
+          style={{
+            textAlign:
+              "center",
+
+            padding:
+              "48px 24px",
+          }}
+        >
+          <div
+            style={{
+              fontSize:
+                38,
+
+              marginBottom:
+                14,
+            }}
+          >
+            🎬
+          </div>
 
           <div
             style={{
-              display: "flex",
-              justifyContent:
-                "space-between",
-              alignItems:
-                "flex-end",
-              gap: 18,
-              marginBottom: 20,
+              fontSize:
+                20,
+
+              fontWeight:
+                650,
+
+              marginBottom:
+                8,
             }}
           >
-            <div>
-              <div
-                style={{
-                  fontSize: 10,
-                  letterSpacing: 2.4,
-                  opacity: 0.4,
-                  marginBottom: 6,
-                }}
-              >
-                NOW AVAILABLE
-              </div>
-
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 25,
-                }}
-              >
-                Pick a Movie
-              </h2>
-            </div>
-
-            {movies.length >
-              0 && (
-              <button
-                className="primary"
-                onClick={
-                  randomPick
-                }
-                style={{
-                  padding:
-                    "11px 17px",
-                  whiteSpace:
-                    "nowrap",
-                }}
-              >
-                ✦ Random Pick
-              </button>
-            )}
+            No movies available
           </div>
 
-          {movies.length ===
-          0 ? (
-            <section
-              className="admin-card"
-              style={{
-                textAlign:
-                  "center",
-                padding:
-                  "48px 24px",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 38,
-                  marginBottom: 14,
-                }}
+          <div className="status">
+            New films will appear
+            here when they are
+            added.
+          </div>
+        </section>
+      ) : (
+        <section className="movie-grid">
+          {movies.map(
+            (movie) => (
+              <article
+                key={
+                  movie.id
+                }
               >
-                🎬
-              </div>
+                <img
+                  className="poster"
+                  src={
+                    movie.poster_url
+                  }
+                  alt={
+                    movie.title
+                  }
+                />
 
-              <div
-                style={{
-                  fontSize: 20,
-                  fontWeight: 650,
-                  marginBottom: 8,
-                }}
-              >
-                No movies available
-              </div>
+                <div className="movie-title">
+                  {
+                    movie.title
+                  }
+                </div>
 
-              <div className="status">
-                New films will appear
-                here when they are
-                added.
-              </div>
-            </section>
-          ) : (
-            <section className="movie-grid">
-              {movies.map(
-                (movie) => (
-                  <article
-                    key={
-                      movie.id
-                    }
-                  >
-                    <img
-                      className="poster"
-                      src={
-                        movie.poster_url
-                      }
-                      alt={
-                        movie.title
-                      }
-                    />
-
-                    <div className="movie-title">
-                      {
-                        movie.title
-                      }
-                    </div>
-
-                    <button
-                      className="pick-button"
-                      onClick={() =>
-                        setChosenMovie(
-                          movie
-                        )
-                      }
-                    >
-                      Choose
-                    </button>
-                  </article>
-                )
-              )}
-            </section>
+                <button
+                  className="pick-button"
+                  onClick={() =>
+                    setChosenMovie(
+                      movie
+                    )
+                  }
+                >
+                  Choose
+                </button>
+              </article>
+            )
           )}
-        </>
+        </section>
       )}
 
       {/*
@@ -1320,7 +1679,9 @@ export default function HomePage() {
         >
           <div
             className="modal"
-            onClick={(e) =>
+            onClick={(
+              e
+            ) =>
               e.stopPropagation()
             }
           >
@@ -1335,10 +1696,17 @@ export default function HomePage() {
 
             <div
               style={{
-                fontSize: 10,
-                letterSpacing: 2,
-                opacity: 0.4,
-                marginTop: 15,
+                fontSize:
+                  10,
+
+                letterSpacing:
+                  2,
+
+                opacity:
+                  0.4,
+
+                marginTop:
+                  15,
               }}
             >
               OUR CINEMA
@@ -1393,101 +1761,119 @@ export default function HomePage() {
         CONFIRM SHOWTIME
       */}
 
-      {chosenShowtime &&
-        screening && (
+      {chosenShowtime && (
+        <div
+          className="modal-backdrop"
+          onClick={() =>
+            setChosenShowtime(
+              null
+            )
+          }
+        >
           <div
-            className="modal-backdrop"
-            onClick={() =>
-              setChosenShowtime(
-                null
-              )
+            className="modal"
+            onClick={(
+              e
+            ) =>
+              e.stopPropagation()
             }
           >
-            <div
-              className="modal"
-              onClick={(e) =>
-                e.stopPropagation()
+            <img
+              src={
+                chosenShowtime
+                  .screening
+                  .poster_url
               }
-            >
-              <img
-                src={
-                  screening.poster_url
-                }
-                alt={
-                  screening.movie_title
-                }
-              />
+              alt={
+                chosenShowtime
+                  .screening
+                  .movie_title
+              }
+            />
 
-              <h3>
-                {
-                  screening.movie_title
-                }
-              </h3>
+            <h3>
+              {
+                chosenShowtime
+                  .screening
+                  .movie_title
+              }
+            </h3>
 
-              <p>
-                {formatDate(
-                  chosenShowtime.screening_date
-                )}
-                <br />
-                <strong
-                  style={{
-                    fontSize: 22,
-                  }}
-                >
-                  {chosenShowtime.screening_time.slice(
+            <p>
+              {formatDate(
+                chosenShowtime
+                  .showtime
+                  .screening_date
+              )}
+
+              <br />
+
+              <strong
+                style={{
+                  fontSize:
+                    22,
+                }}
+              >
+                {chosenShowtime
+                  .showtime
+                  .screening_time
+                  .slice(
                     0,
                     5
                   )}
-                </strong>
-              </p>
+              </strong>
+            </p>
 
-              <div className="modal-actions">
-                <button
-                  className="primary"
-                  disabled={
-                    working
-                  }
-                  onClick={() =>
-                    confirmShowtime(
-                      chosenShowtime
-                    )
-                  }
-                >
-                  {working
-                    ? "Booking…"
-                    : "Get Ticket"}
-                </button>
+            <div className="modal-actions">
+              <button
+                className="primary"
+                disabled={
+                  working
+                }
+                onClick={() =>
+                  confirmShowtime(
+                    chosenShowtime
+                      .screening,
 
-                <button
-                  className="secondary"
-                  disabled={
-                    working
-                  }
-                  onClick={() =>
-                    setChosenShowtime(
-                      null
-                    )
-                  }
-                >
-                  Cancel
-                </button>
-              </div>
+                    chosenShowtime
+                      .showtime
+                  )
+                }
+              >
+                {working
+                  ? "Booking…"
+                  : "Get Ticket"}
+              </button>
+
+              <button
+                className="secondary"
+                disabled={
+                  working
+                }
+                onClick={() =>
+                  setChosenShowtime(
+                    null
+                  )
+                }
+              >
+                Cancel
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
       {/*
         ONE-TIME RATING POPUP
       */}
 
       {ratingScreening && (
-        <div
-          className="modal-backdrop"
-        >
+        <div className="modal-backdrop">
           <div
             className="modal"
             style={{
-              maxWidth: 430,
+              maxWidth:
+                430,
             }}
           >
             <img
@@ -1501,10 +1887,17 @@ export default function HomePage() {
 
             <div
               style={{
-                fontSize: 10,
-                letterSpacing: 2,
-                opacity: 0.4,
-                marginTop: 16,
+                fontSize:
+                  10,
+
+                letterSpacing:
+                  2,
+
+                opacity:
+                  0.4,
+
+                marginTop:
+                  16,
               }}
             >
               HOW WAS THE MOVIE?
@@ -1535,7 +1928,8 @@ export default function HomePage() {
             <div
               className="modal-actions"
               style={{
-                marginTop: 8,
+                marginTop:
+                  8,
               }}
             >
               <button
