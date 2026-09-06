@@ -432,9 +432,12 @@ export default function HistoryPage() {
 
         <div
           style={{
-            display: "flex",
-            gap: 7,
-            flexWrap: "wrap",
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(5, 1fr)",
+            gap: 4,
+            width: "100%",
+            maxWidth: 180,
           }}
         >
           {[1, 2, 3, 4, 5].map(
@@ -458,8 +461,9 @@ export default function HistoryPage() {
                   padding: 0,
                   cursor:
                     "pointer",
-                  fontSize: 29,
+                  fontSize: 22,
                   lineHeight: 1,
+                  width: "100%",
 
                   color:
                     rating &&
