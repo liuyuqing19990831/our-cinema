@@ -29,6 +29,7 @@ type Screening = {
   id: number;
   movie_title: string;
   festival_id: number | null;
+  status: string;
 };
 
 export default function FestivalPage() {
@@ -212,8 +213,12 @@ export default function FestivalPage() {
         []) as FestivalMovie[];
 
     /*
-      FIND MOVIES ALREADY
-      CHOSEN FROM THIS FESTIVAL
+      FIND ONLY CURRENTLY
+      CHOSEN FESTIVAL FILMS
+
+      IMPORTANT:
+      cancelled / old records
+      do NOT hide a film
     */
 
     const {
@@ -226,11 +231,18 @@ export default function FestivalPage() {
         "screenings"
       )
       .select(
-        "id, movie_title, festival_id"
+        "id, movie_title, festival_id, status"
       )
       .eq(
         "festival_id",
         visibleFestival.id
+      )
+      .in(
+        "status",
+        [
+          "waiting_schedule",
+          "scheduled",
+        ]
       );
 
     if (
@@ -239,12 +251,6 @@ export default function FestivalPage() {
       console.error(
         screeningError
       );
-
-      /*
-        If screening lookup fails,
-        still show all movies instead
-        of breaking the festival.
-      */
 
       setMovies(
         allMovies
@@ -272,8 +278,8 @@ export default function FestivalPage() {
       );
 
     /*
-      HIDE ALREADY CHOSEN MOVIES
-      FROM GUEST FESTIVAL PAGE
+      HIDE ONLY FILMS THAT ARE
+      CURRENTLY SELECTED / BOOKED
     */
 
     const remainingMovies =
@@ -448,9 +454,10 @@ export default function FestivalPage() {
     );
 
     /*
-      EXTRA CHECK:
-      PREVENT SAME FESTIVAL FILM
-      FROM BEING CHOSEN TWICE
+      PREVENT DUPLICATE ACTIVE
+      SELECTIONS ONLY
+
+      cancelled records do not count
     */
 
     const {
@@ -462,7 +469,9 @@ export default function FestivalPage() {
       .from(
         "screenings"
       )
-      .select("id")
+      .select(
+        "id, status"
+      )
       .eq(
         "festival_id",
         festival.id
@@ -470,6 +479,13 @@ export default function FestivalPage() {
       .eq(
         "movie_title",
         movie.title
+      )
+      .in(
+        "status",
+        [
+          "waiting_schedule",
+          "scheduled",
+        ]
       )
       .limit(1);
 
@@ -544,21 +560,33 @@ export default function FestivalPage() {
       return;
     }
 
+    /*
+      IMMEDIATELY REMOVE
+      JUST THIS FILM LOCALLY
+    */
+
+    setMovies(
+      (current) =>
+        current.filter(
+          (item) =>
+            item.id !==
+            movie.id
+        )
+    );
+
     setChosenMovie(
       null
     );
 
     /*
-      REFRESH FIRST,
-      SO THE MOVIE IS ALREADY
-      HIDDEN IF USER COMES BACK
+      RELOAD FROM DATABASE
+      TO KEEP STATE ACCURATE
     */
 
     await loadFestival();
 
     /*
-      GO TO NORMAL CINEMA
-      SCHEDULING FLOW
+      GO BACK TO MAIN CINEMA
     */
 
     router.push(
