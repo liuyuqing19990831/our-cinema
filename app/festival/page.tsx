@@ -25,69 +25,110 @@ type FestivalMovie = {
   poster_url: string;
 };
 
+type Screening = {
+  id: number;
+  movie_title: string;
+  festival_id: number | null;
+};
+
 export default function FestivalPage() {
   const router = useRouter();
 
-  const [festival, setFestival] =
-    useState<Festival | null>(null);
+  const [
+    festival,
+    setFestival,
+  ] =
+    useState<Festival | null>(
+      null
+    );
 
-  const [movies, setMovies] =
-    useState<FestivalMovie[]>([]);
+  const [
+    movies,
+    setMovies,
+  ] =
+    useState<
+      FestivalMovie[]
+    >([]);
 
-  const [loading, setLoading] =
+  const [
+    loading,
+    setLoading,
+  ] =
     useState(true);
 
   const [
     chosenMovie,
     setChosenMovie,
   ] =
-    useState<FestivalMovie | null>(
-      null
-    );
+    useState<
+      FestivalMovie | null
+    >(null);
 
-  const [working, setWorking] =
+  const [
+    working,
+    setWorking,
+  ] =
     useState(false);
 
   async function loadFestival() {
     setLoading(true);
 
     /*
-      FIND FESTIVAL MARKED ACTIVE
+      FIND ACTIVE FESTIVAL
     */
+
     const {
-      data: festivalData,
-      error: festivalError,
+      data:
+        festivalData,
+      error:
+        festivalError,
     } = await supabase
       .from("festivals")
       .select("*")
-      .eq("status", "active")
-      .order("created_at", {
-        ascending: false,
-      })
+      .eq(
+        "status",
+        "active"
+      )
+      .order(
+        "created_at",
+        {
+          ascending:
+            false,
+        }
+      )
       .limit(1);
 
-    if (festivalError) {
+    if (
+      festivalError
+    ) {
       console.error(
         festivalError
       );
 
-      setFestival(null);
-      setMovies([]);
-      setLoading(false);
+      setFestival(
+        null
+      );
+
+      setMovies(
+        []
+      );
+
+      setLoading(
+        false
+      );
+
       return;
     }
 
     const activeFestival =
       festivalData &&
-      festivalData.length > 0
+      festivalData.length >
+        0
         ? (festivalData[0] as Festival)
         : null;
 
     /*
       CHECK DATE RANGE
-
-      Festival only appears when:
-      start_date <= today <= end_date
     */
 
     const today =
@@ -97,8 +138,10 @@ export default function FestivalPage() {
 
     const visibleFestival =
       activeFestival &&
-      activeFestival.start_date <= today &&
-      activeFestival.end_date >= today
+      activeFestival.start_date <=
+        today &&
+      activeFestival.end_date >=
+        today
         ? activeFestival
         : null;
 
@@ -106,54 +149,148 @@ export default function FestivalPage() {
       visibleFestival
     );
 
-    /*
-      NO CURRENT FESTIVAL
+    if (
+      !visibleFestival
+    ) {
+      setMovies(
+        []
+      );
 
-      This covers:
-      - no active festival
-      - festival hasn't started yet
-      - festival has already ended
-    */
-    if (!visibleFestival) {
-      setMovies([]);
-      setLoading(false);
+      setLoading(
+        false
+      );
+
       return;
     }
 
     /*
-      LOAD ALL MOVIES
-      IN CURRENT FESTIVAL
+      LOAD ALL FESTIVAL MOVIES
     */
+
     const {
-      data: movieData,
-      error: movieError,
+      data:
+        movieData,
+      error:
+        movieError,
     } = await supabase
-      .from("festival_movies")
+      .from(
+        "festival_movies"
+      )
       .select("*")
       .eq(
         "festival_id",
         visibleFestival.id
       )
-      .order("created_at", {
-        ascending: true,
-      });
+      .order(
+        "created_at",
+        {
+          ascending:
+            true,
+        }
+      );
 
-    if (movieError) {
+    if (
+      movieError
+    ) {
       console.error(
         movieError
       );
 
-      setMovies([]);
-      setLoading(false);
+      setMovies(
+        []
+      );
+
+      setLoading(
+        false
+      );
+
       return;
     }
 
-    setMovies(
+    const allMovies =
       (movieData ??
-        []) as FestivalMovie[]
+        []) as FestivalMovie[];
+
+    /*
+      FIND MOVIES ALREADY
+      CHOSEN FROM THIS FESTIVAL
+    */
+
+    const {
+      data:
+        screeningData,
+      error:
+        screeningError,
+    } = await supabase
+      .from(
+        "screenings"
+      )
+      .select(
+        "id, movie_title, festival_id"
+      )
+      .eq(
+        "festival_id",
+        visibleFestival.id
+      );
+
+    if (
+      screeningError
+    ) {
+      console.error(
+        screeningError
+      );
+
+      /*
+        If screening lookup fails,
+        still show all movies instead
+        of breaking the festival.
+      */
+
+      setMovies(
+        allMovies
+      );
+
+      setLoading(
+        false
+      );
+
+      return;
+    }
+
+    const chosenScreenings =
+      (screeningData ??
+        []) as Screening[];
+
+    const chosenTitles =
+      new Set(
+        chosenScreenings.map(
+          (
+            screening
+          ) =>
+            screening.movie_title
+        )
+      );
+
+    /*
+      HIDE ALREADY CHOSEN MOVIES
+      FROM GUEST FESTIVAL PAGE
+    */
+
+    const remainingMovies =
+      allMovies.filter(
+        (movie) =>
+          !chosenTitles.has(
+            movie.title
+          )
+      );
+
+    setMovies(
+      remainingMovies
     );
 
-    setLoading(false);
+    setLoading(
+      false
+    );
   }
 
   useEffect(() => {
@@ -167,8 +304,10 @@ export default function FestivalPage() {
         .on(
           "postgres_changes",
           {
-            event: "*",
-            schema: "public",
+            event:
+              "*",
+            schema:
+              "public",
             table:
               "festivals",
           },
@@ -185,8 +324,10 @@ export default function FestivalPage() {
         .on(
           "postgres_changes",
           {
-            event: "*",
-            schema: "public",
+            event:
+              "*",
+            schema:
+              "public",
             table:
               "festival_movies",
           },
@@ -195,11 +336,31 @@ export default function FestivalPage() {
         )
         .subscribe();
 
+    const screeningChannel =
+      supabase
+        .channel(
+          "festival-screenings-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event:
+              "*",
+            schema:
+              "public",
+            table:
+              "screenings",
+          },
+          () =>
+            loadFestival()
+        )
+        .subscribe();
+
     /*
-      DATE CAN CHANGE WHILE PAGE
-      STAYS OPEN, SO CHECK AGAIN
-      EVERY MINUTE
+      DATE MAY CHANGE
+      WHILE PAGE IS OPEN
     */
+
     const timer =
       window.setInterval(
         () => {
@@ -217,6 +378,10 @@ export default function FestivalPage() {
         movieChannel
       );
 
+      supabase.removeChannel(
+        screeningChannel
+      );
+
       window.clearInterval(
         timer
       );
@@ -225,7 +390,8 @@ export default function FestivalPage() {
 
   function randomPick() {
     if (
-      movies.length === 0
+      movies.length ===
+      0
     ) {
       return;
     }
@@ -238,29 +404,35 @@ export default function FestivalPage() {
         )
       ];
 
-    setChosenMovie(movie);
+    setChosenMovie(
+      movie
+    );
   }
 
   async function confirmMovie(
-    movie: FestivalMovie
+    movie:
+      FestivalMovie
   ) {
-    if (!festival) {
+    if (
+      !festival
+    ) {
       return;
     }
 
     /*
-      SAFETY CHECK:
-      don't allow choosing
-      after festival expires
+      SAFETY CHECK
     */
+
     const today =
       new Date().toLocaleDateString(
         "en-CA"
       );
 
     if (
-      festival.start_date > today ||
-      festival.end_date < today
+      festival.start_date >
+        today ||
+      festival.end_date <
+        today
     ) {
       alert(
         "This festival is no longer available."
@@ -271,45 +443,127 @@ export default function FestivalPage() {
       return;
     }
 
-    setWorking(true);
+    setWorking(
+      true
+    );
 
     /*
-      CREATE SCREENING
-      AND REMEMBER FESTIVAL ID
+      EXTRA CHECK:
+      PREVENT SAME FESTIVAL FILM
+      FROM BEING CHOSEN TWICE
     */
-    const { error } =
-      await supabase
-        .from("screenings")
-        .insert({
-          movie_id: null,
 
-          movie_title:
-            movie.title,
+    const {
+      data:
+        existingData,
+      error:
+        existingError,
+    } = await supabase
+      .from(
+        "screenings"
+      )
+      .select("id")
+      .eq(
+        "festival_id",
+        festival.id
+      )
+      .eq(
+        "movie_title",
+        movie.title
+      )
+      .limit(1);
 
-          poster_url:
-            movie.poster_url,
+    if (
+      existingError
+    ) {
+      setWorking(
+        false
+      );
 
-          status:
-            "waiting_schedule",
+      alert(
+        existingError.message
+      );
 
-          festival_id:
-            festival.id,
-        });
-
-    setWorking(false);
-
-    if (error) {
-      alert(error.message);
       return;
     }
 
-    setChosenMovie(null);
+    if (
+      existingData &&
+      existingData.length >
+        0
+    ) {
+      setWorking(
+        false
+      );
+
+      setChosenMovie(
+        null
+      );
+
+      await loadFestival();
+
+      return;
+    }
 
     /*
-      GO BACK TO NORMAL
-      CINEMA SCHEDULING FLOW
+      CREATE SCREENING
     */
-    router.push("/");
+
+    const {
+      error,
+    } = await supabase
+      .from(
+        "screenings"
+      )
+      .insert({
+        movie_id:
+          null,
+
+        movie_title:
+          movie.title,
+
+        poster_url:
+          movie.poster_url,
+
+        status:
+          "waiting_schedule",
+
+        festival_id:
+          festival.id,
+      });
+
+    setWorking(
+      false
+    );
+
+    if (error) {
+      alert(
+        error.message
+      );
+
+      return;
+    }
+
+    setChosenMovie(
+      null
+    );
+
+    /*
+      REFRESH FIRST,
+      SO THE MOVIE IS ALREADY
+      HIDDEN IF USER COMES BACK
+    */
+
+    await loadFestival();
+
+    /*
+      GO TO NORMAL CINEMA
+      SCHEDULING FLOW
+    */
+
+    router.push(
+      "/"
+    );
   }
 
   function formatDate(
@@ -319,26 +573,38 @@ export default function FestivalPage() {
       date.split("-");
 
     if (
-      parts.length !== 3
+      parts.length !==
+      3
     ) {
       return date;
     }
 
     const year =
-      Number(parts[0]);
+      Number(
+        parts[0]
+      );
 
     const month =
-      Number(parts[1]);
+      Number(
+        parts[1]
+      );
 
     const day =
-      Number(parts[2]);
+      Number(
+        parts[2]
+      );
 
     return new Intl.DateTimeFormat(
       "en-US",
       {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
+        month:
+          "short",
+
+        day:
+          "numeric",
+
+        year:
+          "numeric",
       }
     ).format(
       new Date(
@@ -351,7 +617,9 @@ export default function FestivalPage() {
     );
   }
 
-  if (loading) {
+  if (
+    loading
+  ) {
     return (
       <main className="shell">
         <div className="empty">
@@ -362,10 +630,12 @@ export default function FestivalPage() {
   }
 
   /*
-    NO FESTIVAL CURRENTLY AVAILABLE
+    NO CURRENT FESTIVAL
   */
 
-  if (!festival) {
+  if (
+    !festival
+  ) {
     return (
       <main className="shell">
         <header
@@ -373,7 +643,9 @@ export default function FestivalPage() {
           style={{
             alignItems:
               "center",
-            gap: 16,
+
+            gap:
+              16,
           }}
         >
           <div>
@@ -407,9 +679,11 @@ export default function FestivalPage() {
         <section
           className="admin-card"
           style={{
-            minHeight: 320,
+            minHeight:
+              320,
 
-            display: "flex",
+            display:
+              "flex",
 
             flexDirection:
               "column",
@@ -429,8 +703,11 @@ export default function FestivalPage() {
         >
           <div
             style={{
-              fontSize: 50,
-              marginBottom: 22,
+              fontSize:
+                50,
+
+              marginBottom:
+                22,
             }}
           >
             🎞️
@@ -438,13 +715,17 @@ export default function FestivalPage() {
 
           <div
             style={{
-              fontSize: 11,
+              fontSize:
+                11,
 
-              letterSpacing: 3,
+              letterSpacing:
+                3,
 
-              opacity: 0.4,
+              opacity:
+                0.4,
 
-              marginBottom: 14,
+              marginBottom:
+                14,
             }}
           >
             SPECIAL PROGRAM
@@ -452,9 +733,11 @@ export default function FestivalPage() {
 
           <h2
             style={{
-              fontSize: 28,
+              fontSize:
+                28,
 
-              marginBottom: 12,
+              marginBottom:
+                12,
             }}
           >
             暂无特殊影展安排
@@ -462,11 +745,14 @@ export default function FestivalPage() {
 
           <div
             style={{
-              opacity: 0.5,
+              opacity:
+                0.5,
 
-              fontSize: 14,
+              fontSize:
+                14,
 
-              lineHeight: 1.7,
+              lineHeight:
+                1.7,
             }}
           >
             Please check back
@@ -479,7 +765,7 @@ export default function FestivalPage() {
   }
 
   /*
-    ACTIVE + IN-DATE FESTIVAL
+    ACTIVE FESTIVAL
   */
 
   return (
@@ -489,7 +775,9 @@ export default function FestivalPage() {
         style={{
           alignItems:
             "center",
-          gap: 16,
+
+          gap:
+            16,
         }}
       >
         <div>
@@ -523,6 +811,7 @@ export default function FestivalPage() {
       {/*
         FESTIVAL HERO
       */}
+
       <section
         className="admin-card"
         style={{
@@ -532,18 +821,23 @@ export default function FestivalPage() {
           padding:
             "44px 24px",
 
-          marginBottom: 28,
+          marginBottom:
+            28,
         }}
       >
         <div
           style={{
-            fontSize: 11,
+            fontSize:
+              11,
 
-            letterSpacing: 3,
+            letterSpacing:
+              3,
 
-            opacity: 0.4,
+            opacity:
+              0.4,
 
-            marginBottom: 18,
+            marginBottom:
+              18,
           }}
         >
           NOW SHOWING
@@ -554,27 +848,36 @@ export default function FestivalPage() {
             fontSize:
               "clamp(30px, 6vw, 52px)",
 
-            lineHeight: 1.05,
+            lineHeight:
+              1.05,
 
-            marginBottom: 18,
+            marginBottom:
+              18,
           }}
         >
-          {festival.title}
+          {
+            festival.title
+          }
         </h2>
 
         <div
           style={{
-            fontSize: 15,
+            fontSize:
+              15,
 
-            opacity: 0.65,
+            opacity:
+              0.65,
 
-            letterSpacing: 0.4,
+            letterSpacing:
+              0.4,
           }}
         >
           {formatDate(
             festival.start_date
           )}
+
           {" — "}
+
           {formatDate(
             festival.end_date
           )}
@@ -584,7 +887,9 @@ export default function FestivalPage() {
       {/*
         MOVIE LIST
       */}
-      {movies.length === 0 ? (
+
+      {movies.length ===
+      0 ? (
         <section
           className="admin-card"
           style={{
@@ -597,17 +902,43 @@ export default function FestivalPage() {
         >
           <div
             style={{
-              opacity: 0.5,
+              fontSize:
+                38,
+
+              marginBottom:
+                14,
             }}
           >
-            Festival films coming soon.
+            ✓
+          </div>
+
+          <div
+            style={{
+              fontSize:
+                20,
+
+              fontWeight:
+                650,
+
+              marginBottom:
+                8,
+            }}
+          >
+            All festival films selected
+          </div>
+
+          <div className="status">
+            Your selected films
+            are waiting in the
+            main cinema.
           </div>
         </section>
       ) : (
         <>
           <div
             style={{
-              display: "flex",
+              display:
+                "flex",
 
               justifyContent:
                 "space-between",
@@ -615,21 +946,27 @@ export default function FestivalPage() {
               alignItems:
                 "center",
 
-              gap: 16,
+              gap:
+                16,
 
-              marginBottom: 18,
+              marginBottom:
+                18,
             }}
           >
             <div>
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize:
+                    11,
 
-                  letterSpacing: 2,
+                  letterSpacing:
+                    2,
 
-                  opacity: 0.4,
+                  opacity:
+                    0.4,
 
-                  marginBottom: 5,
+                  marginBottom:
+                    5,
                 }}
               >
                 PROGRAM
@@ -637,13 +974,16 @@ export default function FestivalPage() {
 
               <div
                 style={{
-                  fontSize: 20,
+                  fontSize:
+                    20,
 
-                  fontWeight: 650,
+                  fontWeight:
+                    650,
                 }}
               >
                 {movies.length}{" "}
-                {movies.length === 1
+                {movies.length ===
+                1
                   ? "Film"
                   : "Films"}
               </div>
@@ -710,6 +1050,7 @@ export default function FestivalPage() {
       {/*
         CONFIRM MOVIE
       */}
+
       {chosenMovie && (
         <div
           className="modal-backdrop"
@@ -721,7 +1062,9 @@ export default function FestivalPage() {
         >
           <div
             className="modal"
-            onClick={(e) =>
+            onClick={(
+              e
+            ) =>
               e.stopPropagation()
             }
           >
@@ -736,13 +1079,17 @@ export default function FestivalPage() {
 
             <div
               style={{
-                fontSize: 10,
+                fontSize:
+                  10,
 
-                letterSpacing: 2,
+                letterSpacing:
+                  2,
 
-                opacity: 0.4,
+                opacity:
+                  0.4,
 
-                marginTop: 15,
+                marginTop:
+                  15,
               }}
             >
               {
