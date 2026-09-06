@@ -32,7 +32,8 @@ type Showtime = {
 };
 
 export default function AdminPage() {
-  const [title, setTitle] = useState("");
+  const [title, setTitle] =
+    useState("");
 
   const [file, setFile] =
     useState<File | null>(null);
@@ -74,13 +75,21 @@ export default function AdminPage() {
     setSavingWatchInfo,
   ] = useState<number | null>(null);
 
+  /*
+    用来让 NOW BOOKED
+    自动随时间更新
+  */
+  const [now, setNow] =
+    useState(() => new Date());
+
   async function loadMovies() {
-    const { data } = await supabase
-      .from("movies")
-      .select("*")
-      .order("created_at", {
-        ascending: true,
-      });
+    const { data } =
+      await supabase
+        .from("movies")
+        .select("*")
+        .order("created_at", {
+          ascending: true,
+        });
 
     setMovies(
       (data ?? []) as Movie[]
@@ -88,12 +97,13 @@ export default function AdminPage() {
   }
 
   async function loadScreenings() {
-    const { data } = await supabase
-      .from("screenings")
-      .select("*")
-      .order("created_at", {
-        ascending: false,
-      });
+    const { data } =
+      await supabase
+        .from("screenings")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        });
 
     const items =
       (data ?? []) as Screening[];
@@ -154,15 +164,22 @@ export default function AdminPage() {
   }
 
   async function loadShowtimes() {
-    const { data } = await supabase
-      .from("showtimes")
-      .select("*")
-      .order("screening_date", {
-        ascending: true,
-      })
-      .order("screening_time", {
-        ascending: true,
-      });
+    const { data } =
+      await supabase
+        .from("showtimes")
+        .select("*")
+        .order(
+          "screening_date",
+          {
+            ascending: true,
+          }
+        )
+        .order(
+          "screening_time",
+          {
+            ascending: true,
+          }
+        );
 
     setShowtimes(
       (data ?? []) as Showtime[]
@@ -180,18 +197,35 @@ export default function AdminPage() {
   useEffect(() => {
     loadAll();
 
-    const movieChannel = supabase
-      .channel("admin-movies-live")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "movies",
+    /*
+      每 30 秒更新时间。
+      即使 Admin 页面一直开着，
+      过期电影也会自动离开
+      NOW BOOKED。
+    */
+    const timer =
+      window.setInterval(
+        () => {
+          setNow(new Date());
         },
-        loadMovies
-      )
-      .subscribe();
+        30000
+      );
+
+    const movieChannel =
+      supabase
+        .channel(
+          "admin-movies-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "movies",
+          },
+          loadMovies
+        )
+        .subscribe();
 
     const screeningChannel =
       supabase
@@ -203,7 +237,8 @@ export default function AdminPage() {
           {
             event: "*",
             schema: "public",
-            table: "screenings",
+            table:
+              "screenings",
           },
           loadScreenings
         )
@@ -219,13 +254,18 @@ export default function AdminPage() {
           {
             event: "*",
             schema: "public",
-            table: "showtimes",
+            table:
+              "showtimes",
           },
           loadShowtimes
         )
         .subscribe();
 
     return () => {
+      window.clearInterval(
+        timer
+      );
+
       supabase.removeChannel(
         movieChannel
       );
@@ -253,7 +293,9 @@ export default function AdminPage() {
 
     setPreview(
       f
-        ? URL.createObjectURL(f)
+        ? URL.createObjectURL(
+            f
+          )
         : ""
     );
   }
@@ -325,7 +367,9 @@ export default function AdminPage() {
       return;
     }
 
-    const { data: urlData } =
+    const {
+      data: urlData,
+    } =
       supabase.storage
         .from("posters")
         .getPublicUrl(path);
@@ -336,8 +380,10 @@ export default function AdminPage() {
         .insert({
           title:
             title.trim(),
+
           poster_url:
             urlData.publicUrl,
+
           status:
             "available",
         });
@@ -361,9 +407,10 @@ export default function AdminPage() {
   async function removeMovie(
     movie: Movie
   ) {
-    const ok = confirm(
-      `Delete "${movie.title}"?`
-    );
+    const ok =
+      confirm(
+        `Delete "${movie.title}"?`
+      );
 
     if (!ok) return;
 
@@ -377,7 +424,9 @@ export default function AdminPage() {
         );
 
     if (error) {
-      alert(error.message);
+      alert(
+        error.message
+      );
       return;
     }
 
@@ -407,6 +456,7 @@ export default function AdminPage() {
         .update({
           watch_url:
             watchUrl,
+
           watch_code:
             watchCode,
         })
@@ -415,10 +465,14 @@ export default function AdminPage() {
           screening.id
         );
 
-    setSavingWatchInfo(null);
+    setSavingWatchInfo(
+      null
+    );
 
     if (error) {
-      alert(error.message);
+      alert(
+        error.message
+      );
       return;
     }
 
@@ -468,21 +522,25 @@ export default function AdminPage() {
 
     const {
       error: watchError,
-    } = await supabase
-      .from("screenings")
-      .update({
-        watch_url:
-          watchUrl,
-        watch_code:
-          watchCode,
-      })
-      .eq(
-        "id",
-        screening.id
-      );
+    } =
+      await supabase
+        .from("screenings")
+        .update({
+          watch_url:
+            watchUrl,
+
+          watch_code:
+            watchCode,
+        })
+        .eq(
+          "id",
+          screening.id
+        );
 
     if (watchError) {
-      setSavingShowtime(null);
+      setSavingShowtime(
+        null
+      );
 
       alert(
         watchError.message
@@ -497,29 +555,38 @@ export default function AdminPage() {
         .insert({
           screening_id:
             screening.id,
+
           screening_date:
             date,
+
           screening_time:
             time,
+
           status:
             "available",
         });
 
-    setSavingShowtime(null);
+    setSavingShowtime(
+      null
+    );
 
     if (error) {
-      alert(error.message);
+      alert(
+        error.message
+      );
       return;
     }
 
     setDateValues({
       ...dateValues,
+
       [screening.id]:
         "",
     });
 
     setTimeValues({
       ...timeValues,
+
       [screening.id]:
         "",
     });
@@ -540,7 +607,9 @@ export default function AdminPage() {
         );
 
     if (error) {
-      alert(error.message);
+      alert(
+        error.message
+      );
       return;
     }
 
@@ -550,26 +619,31 @@ export default function AdminPage() {
   async function cancelScreening(
     screening: Screening
   ) {
-    const ok = confirm(
-      `Cancel "${screening.movie_title}" screening? The movie ticket will disappear.`
-    );
+    const ok =
+      confirm(
+        `Cancel "${screening.movie_title}" screening? The movie ticket will disappear.`
+      );
 
     if (!ok) return;
 
     const {
-      error: showtimeError,
-    } = await supabase
-      .from("showtimes")
-      .update({
-        status:
-          "cancelled",
-      })
-      .eq(
-        "screening_id",
-        screening.id
-      );
+      error:
+        showtimeError,
+    } =
+      await supabase
+        .from("showtimes")
+        .update({
+          status:
+            "cancelled",
+        })
+        .eq(
+          "screening_id",
+          screening.id
+        );
 
-    if (showtimeError) {
+    if (
+      showtimeError
+    ) {
       alert(
         showtimeError.message
       );
@@ -579,20 +653,23 @@ export default function AdminPage() {
     const {
       error:
         screeningError,
-    } = await supabase
-      .from("screenings")
-      .update({
-        status:
-          "cancelled",
-        screening_date:
-          null,
-        screening_time:
-          null,
-      })
-      .eq(
-        "id",
-        screening.id
-      );
+    } =
+      await supabase
+        .from("screenings")
+        .update({
+          status:
+            "cancelled",
+
+          screening_date:
+            null,
+
+          screening_time:
+            null,
+        })
+        .eq(
+          "id",
+          screening.id
+        );
 
     if (
       screeningError
@@ -617,11 +694,42 @@ export default function AdminPage() {
         "waiting_schedule"
     );
 
+  /*
+    只把未来的 scheduled
+    screening 当作 NOW BOOKED。
+
+    一旦到达放映时间，
+    就自动从 Admin 消失，
+    但数据库记录不会删除，
+    History 仍然可以正常显示。
+  */
   const scheduledScreenings =
     screenings.filter(
-      (screening) =>
-        screening.status ===
-        "scheduled"
+      (screening) => {
+        if (
+          screening.status !==
+          "scheduled"
+        ) {
+          return false;
+        }
+
+        if (
+          !screening.screening_date ||
+          !screening.screening_time
+        ) {
+          return false;
+        }
+
+        const screeningDate =
+          new Date(
+            `${screening.screening_date}T${screening.screening_time}`
+          );
+
+        return (
+          screeningDate >=
+          now
+        );
+      }
     );
 
   function WatchInfoEditor({
@@ -633,9 +741,12 @@ export default function AdminPage() {
       <div
         style={{
           padding: 18,
+
           border:
             "1px solid rgba(255,255,255,0.09)",
+
           borderRadius: 12,
+
           background:
             "rgba(255,255,255,0.025)",
         }}
@@ -643,9 +754,14 @@ export default function AdminPage() {
         <div
           style={{
             fontSize: 11,
-            letterSpacing: 1.8,
+
+            letterSpacing:
+              1.8,
+
             opacity: 0.5,
-            marginBottom: 14,
+
+            marginBottom:
+              14,
           }}
         >
           WATCH INFO
@@ -654,8 +770,11 @@ export default function AdminPage() {
         <label
           className="label"
           style={{
-            display: "block",
-            marginBottom: 8,
+            display:
+              "block",
+
+            marginBottom:
+              8,
           }}
         >
           Watch Link
@@ -669,27 +788,38 @@ export default function AdminPage() {
               screening.id
             ] ?? ""
           }
-          onChange={(e) =>
+          onChange={(
+            e
+          ) =>
             setWatchValues({
               ...watchValues,
+
               [screening.id]:
-                e.target.value,
+                e.target
+                  .value,
             })
           }
           placeholder="Baidu, Drive, YouTube, Vimeo..."
           style={{
-            width: "100%",
+            width:
+              "100%",
+
             boxSizing:
               "border-box",
-            marginBottom: 14,
+
+            marginBottom:
+              14,
           }}
         />
 
         <label
           className="label"
           style={{
-            display: "block",
-            marginBottom: 8,
+            display:
+              "block",
+
+            marginBottom:
+              8,
           }}
         >
           Access Code
@@ -703,19 +833,28 @@ export default function AdminPage() {
               screening.id
             ] ?? ""
           }
-          onChange={(e) =>
+          onChange={(
+            e
+          ) =>
             setCodeValues({
               ...codeValues,
+
               [screening.id]:
-                e.target.value,
+                e.target
+                  .value,
             })
           }
           placeholder="e.g. 8X3A"
           style={{
-            width: "100%",
+            width:
+              "100%",
+
             boxSizing:
               "border-box",
-            marginBottom: 12,
+
+            marginBottom:
+              12,
+
             textTransform:
               "none",
           }}
@@ -724,14 +863,19 @@ export default function AdminPage() {
         <div
           style={{
             fontSize: 11,
+
             opacity: 0.45,
-            lineHeight: 1.5,
-            marginBottom: 12,
+
+            lineHeight:
+              1.5,
+
+            marginBottom:
+              12,
           }}
         >
-          Optional. The access code
-          will appear on the movie
-          ticket.
+          Optional. The access
+          code will appear on the
+          movie ticket.
         </div>
 
         <button
@@ -746,7 +890,9 @@ export default function AdminPage() {
             screening.id
           }
           style={{
-            width: "100%",
+            width:
+              "100%",
+
             padding:
               "11px 15px",
           }}
@@ -778,33 +924,44 @@ export default function AdminPage() {
           </div>
         </div>
 
-       <div
-  style={{
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    alignItems: "center",
-  }}
->
-  <Link
-    href="/admin/festival"
-    className="secondary"
-    style={{
-      textDecoration: "none",
-      padding: "10px 16px",
-      whiteSpace: "nowrap",
-    }}
-  >
-    🎞 Special Festival
-  </Link>
+        <div
+          style={{
+            display:
+              "flex",
 
-  <Link
-    href="/"
-    className="admin-link"
-  >
-    Guest View
-  </Link>
-</div>
+            gap: 10,
+
+            flexWrap:
+              "wrap",
+
+            alignItems:
+              "center",
+          }}
+        >
+          <Link
+            href="/admin/festival"
+            className="secondary"
+            style={{
+              textDecoration:
+                "none",
+
+              padding:
+                "10px 16px",
+
+              whiteSpace:
+                "nowrap",
+            }}
+          >
+            🎞 Special Festival
+          </Link>
+
+          <Link
+            href="/"
+            className="admin-link"
+          >
+            Guest View
+          </Link>
+        </div>
       </header>
 
       {/* CURRENT SCREENING */}
@@ -812,15 +969,22 @@ export default function AdminPage() {
       <section className="admin-card">
         <div
           style={{
-            marginBottom: 22,
+            marginBottom:
+              22,
           }}
         >
           <div
             style={{
               fontSize: 11,
-              letterSpacing: 2.2,
-              opacity: 0.45,
-              marginBottom: 6,
+
+              letterSpacing:
+                2.2,
+
+              opacity:
+                0.45,
+
+              marginBottom:
+                6,
             }}
           >
             NOW BOOKED
@@ -848,19 +1012,26 @@ export default function AdminPage() {
                   screening.id
                 }
                 style={{
-                  marginBottom: 28,
+                  marginBottom:
+                    28,
                 }}
               >
                 <div
                   style={{
                     display:
                       "grid",
+
                     gridTemplateColumns:
                       "90px 1fr",
-                    gap: 20,
+
+                    gap:
+                      20,
+
                     alignItems:
                       "start",
-                    marginBottom: 22,
+
+                    marginBottom:
+                      22,
                   }}
                 >
                   <img
@@ -871,21 +1042,31 @@ export default function AdminPage() {
                       screening.movie_title
                     }
                     style={{
-                      width: 90,
+                      width:
+                        90,
+
                       aspectRatio:
                         "2 / 3",
+
                       objectFit:
                         "cover",
-                      borderRadius: 10,
+
+                      borderRadius:
+                        10,
                     }}
                   />
 
                   <div>
                     <div
                       style={{
-                        fontSize: 22,
-                        fontWeight: 650,
-                        marginBottom: 8,
+                        fontSize:
+                          22,
+
+                        fontWeight:
+                          650,
+
+                        marginBottom:
+                          8,
                       }}
                     >
                       {
@@ -895,8 +1076,11 @@ export default function AdminPage() {
 
                     <div
                       style={{
-                        fontSize: 15,
-                        opacity: 0.72,
+                        fontSize:
+                          15,
+
+                        opacity:
+                          0.72,
                       }}
                     >
                       {
@@ -913,7 +1097,8 @@ export default function AdminPage() {
 
                 <div
                   style={{
-                    marginBottom: 18,
+                    marginBottom:
+                      18,
                   }}
                 >
                   <WatchInfoEditor
@@ -927,9 +1112,12 @@ export default function AdminPage() {
                   style={{
                     display:
                       "flex",
+
                     flexWrap:
                       "wrap",
-                    gap: 10,
+
+                    gap:
+                      10,
                   }}
                 >
                   <Link
@@ -938,8 +1126,10 @@ export default function AdminPage() {
                     style={{
                       display:
                         "inline-block",
+
                       textDecoration:
                         "none",
+
                       padding:
                         "10px 15px",
                     }}
@@ -969,15 +1159,23 @@ export default function AdminPage() {
       <section className="admin-card">
         <div
           style={{
-            marginBottom: 26,
+            marginBottom:
+              26,
           }}
         >
           <div
             style={{
-              fontSize: 11,
-              letterSpacing: 2.2,
-              opacity: 0.45,
-              marginBottom: 6,
+              fontSize:
+                11,
+
+              letterSpacing:
+                2.2,
+
+              opacity:
+                0.45,
+
+              marginBottom:
+                6,
             }}
           >
             PROGRAMMING
@@ -988,21 +1186,25 @@ export default function AdminPage() {
               margin: 0,
             }}
           >
-            Schedule Selected Movie
+            Schedule Selected
+            Movie
           </h2>
         </div>
 
         {waitingScreenings.length ===
         0 ? (
           <div className="status">
-            No movie is waiting for scheduling.
+            No movie is waiting
+            for scheduling.
           </div>
         ) : (
           waitingScreenings.map(
             (screening) => {
               const currentShowtimes =
                 showtimes.filter(
-                  (showtime) =>
+                  (
+                    showtime
+                  ) =>
                     showtime.screening_id ===
                       screening.id &&
                     showtime.status !==
@@ -1015,19 +1217,26 @@ export default function AdminPage() {
                     screening.id
                   }
                   style={{
-                    marginBottom: 20,
+                    marginBottom:
+                      20,
                   }}
                 >
                   <div
                     style={{
                       display:
                         "grid",
+
                       gridTemplateColumns:
                         "110px 1fr",
-                      gap: 22,
+
+                      gap:
+                        22,
+
                       alignItems:
                         "center",
-                      marginBottom: 30,
+
+                      marginBottom:
+                        30,
                     }}
                   >
                     <img
@@ -1038,22 +1247,34 @@ export default function AdminPage() {
                         screening.movie_title
                       }
                       style={{
-                        width: 110,
+                        width:
+                          110,
+
                         aspectRatio:
                           "2 / 3",
+
                         objectFit:
                           "cover",
-                        borderRadius: 12,
+
+                        borderRadius:
+                          12,
                       }}
                     />
 
                     <div>
                       <div
                         style={{
-                          fontSize: 11,
-                          letterSpacing: 2,
-                          opacity: 0.45,
-                          marginBottom: 8,
+                          fontSize:
+                            11,
+
+                          letterSpacing:
+                            2,
+
+                          opacity:
+                            0.45,
+
+                          marginBottom:
+                            8,
                         }}
                       >
                         SELECTED MOVIE
@@ -1061,10 +1282,17 @@ export default function AdminPage() {
 
                       <div
                         style={{
-                          fontSize: 25,
-                          fontWeight: 650,
-                          lineHeight: 1.15,
-                          marginBottom: 10,
+                          fontSize:
+                            25,
+
+                          fontWeight:
+                            650,
+
+                          lineHeight:
+                            1.15,
+
+                          marginBottom:
+                            10,
                         }}
                       >
                         {
@@ -1074,9 +1302,14 @@ export default function AdminPage() {
 
                       <div
                         style={{
-                          fontSize: 13,
-                          opacity: 0.55,
-                          lineHeight: 1.5,
+                          fontSize:
+                            13,
+
+                          opacity:
+                            0.55,
+
+                          lineHeight:
+                            1.5,
                         }}
                       >
                         Offer possible
@@ -1087,11 +1320,17 @@ export default function AdminPage() {
 
                   <div
                     style={{
-                      display: "grid",
+                      display:
+                        "grid",
+
                       gridTemplateColumns:
                         "repeat(auto-fit, minmax(150px, 1fr))",
-                      gap: 14,
-                      marginBottom: 18,
+
+                      gap:
+                        14,
+
+                      marginBottom:
+                        18,
                     }}
                   >
                     <div>
@@ -1100,7 +1339,9 @@ export default function AdminPage() {
                         style={{
                           display:
                             "block",
-                          marginBottom: 8,
+
+                          marginBottom:
+                            8,
                         }}
                       >
                         Date
@@ -1114,16 +1355,24 @@ export default function AdminPage() {
                             screening.id
                           ] || ""
                         }
-                        onChange={(e) =>
-                          setDateValues({
-                            ...dateValues,
-                            [screening.id]:
-                              e.target
-                                .value,
-                          })
+                        onChange={(
+                          e
+                        ) =>
+                          setDateValues(
+                            {
+                              ...dateValues,
+
+                              [screening.id]:
+                                e
+                                  .target
+                                  .value,
+                            }
+                          )
                         }
                         style={{
-                          width: "100%",
+                          width:
+                            "100%",
+
                           boxSizing:
                             "border-box",
                         }}
@@ -1136,7 +1385,9 @@ export default function AdminPage() {
                         style={{
                           display:
                             "block",
-                          marginBottom: 8,
+
+                          marginBottom:
+                            8,
                         }}
                       >
                         Time
@@ -1150,16 +1401,24 @@ export default function AdminPage() {
                             screening.id
                           ] || ""
                         }
-                        onChange={(e) =>
-                          setTimeValues({
-                            ...timeValues,
-                            [screening.id]:
-                              e.target
-                                .value,
-                          })
+                        onChange={(
+                          e
+                        ) =>
+                          setTimeValues(
+                            {
+                              ...timeValues,
+
+                              [screening.id]:
+                                e
+                                  .target
+                                  .value,
+                            }
+                          )
                         }
                         style={{
-                          width: "100%",
+                          width:
+                            "100%",
+
                           boxSizing:
                             "border-box",
                         }}
@@ -1169,7 +1428,8 @@ export default function AdminPage() {
 
                   <div
                     style={{
-                      marginBottom: 18,
+                      marginBottom:
+                        18,
                     }}
                   >
                     <WatchInfoEditor
@@ -1191,12 +1451,20 @@ export default function AdminPage() {
                       screening.id
                     }
                     style={{
-                      width: "100%",
+                      width:
+                        "100%",
+
                       padding:
                         "15px 20px",
-                      fontSize: 15,
-                      fontWeight: 650,
-                      marginBottom: 28,
+
+                      fontSize:
+                        15,
+
+                      fontWeight:
+                        650,
+
+                      marginBottom:
+                        28,
                     }}
                   >
                     {savingShowtime ===
@@ -1210,10 +1478,17 @@ export default function AdminPage() {
                     <div>
                       <div
                         style={{
-                          fontSize: 11,
-                          letterSpacing: 2,
-                          opacity: 0.45,
-                          marginBottom: 12,
+                          fontSize:
+                            11,
+
+                          letterSpacing:
+                            2,
+
+                          opacity:
+                            0.45,
+
+                          marginBottom:
+                            12,
                         }}
                       >
                         SHOWTIMES OFFERED
@@ -1221,8 +1496,11 @@ export default function AdminPage() {
 
                       <div
                         style={{
-                          display: "grid",
-                          gap: 10,
+                          display:
+                            "grid",
+
+                          gap:
+                            10,
                         }}
                       >
                         {currentShowtimes.map(
@@ -1236,16 +1514,25 @@ export default function AdminPage() {
                               style={{
                                 display:
                                   "flex",
+
                                 justifyContent:
                                   "space-between",
+
                                 alignItems:
                                   "center",
-                                gap: 14,
+
+                                gap:
+                                  14,
+
                                 padding:
                                   "15px 16px",
+
                                 border:
                                   "1px solid rgba(255,255,255,0.09)",
-                                borderRadius: 10,
+
+                                borderRadius:
+                                  10,
+
                                 background:
                                   "rgba(255,255,255,0.025)",
                               }}
@@ -1253,9 +1540,14 @@ export default function AdminPage() {
                               <div>
                                 <div
                                   style={{
-                                    fontSize: 15,
-                                    fontWeight: 600,
-                                    marginBottom: 3,
+                                    fontSize:
+                                      15,
+
+                                    fontWeight:
+                                      600,
+
+                                    marginBottom:
+                                      3,
                                   }}
                                 >
                                   {
@@ -1265,8 +1557,11 @@ export default function AdminPage() {
 
                                 <div
                                   style={{
-                                    fontSize: 13,
-                                    opacity: 0.55,
+                                    fontSize:
+                                      13,
+
+                                    opacity:
+                                      0.55,
                                   }}
                                 >
                                   {showtime.screening_time.slice(
@@ -1298,7 +1593,8 @@ export default function AdminPage() {
 
                   <div
                     style={{
-                      marginTop: 24,
+                      marginTop:
+                        24,
                     }}
                   >
                     <Link
@@ -1307,15 +1603,19 @@ export default function AdminPage() {
                       style={{
                         display:
                           "block",
+
                         textDecoration:
                           "none",
+
                         textAlign:
                           "center",
+
                         padding:
                           "12px 18px",
                       }}
                     >
-                      Preview Guest View →
+                      Preview Guest
+                      View →
                     </Link>
                   </div>
                 </div>
@@ -1330,16 +1630,25 @@ export default function AdminPage() {
       <section className="admin-card">
         <div
           style={{
-            fontSize: 11,
-            letterSpacing: 2.2,
-            opacity: 0.45,
-            marginBottom: 6,
+            fontSize:
+              11,
+
+            letterSpacing:
+              2.2,
+
+            opacity:
+              0.45,
+
+            marginBottom:
+              6,
           }}
         >
           LIBRARY
         </div>
 
-        <h2>Add Movie</h2>
+        <h2>
+          Add Movie
+        </h2>
 
         <form
           onSubmit={
@@ -1354,9 +1663,12 @@ export default function AdminPage() {
             className="file-input"
             type="file"
             accept="image/*"
-            onChange={(e) =>
+            onChange={(
+              e
+            ) =>
               pickFile(
-                e.target.files?.[0] ??
+                e.target
+                  .files?.[0] ??
                   null
               )
             }
@@ -1365,7 +1677,9 @@ export default function AdminPage() {
           {preview && (
             <img
               className="preview"
-              src={preview}
+              src={
+                preview
+              }
               alt="preview"
             />
           )}
@@ -1376,10 +1690,15 @@ export default function AdminPage() {
 
           <input
             className="text-input"
-            value={title}
-            onChange={(e) =>
+            value={
+              title
+            }
+            onChange={(
+              e
+            ) =>
               setTitle(
-                e.target.value
+                e.target
+                  .value
               )
             }
             placeholder="Enter movie title"
@@ -1406,10 +1725,17 @@ export default function AdminPage() {
       <section className="admin-card">
         <div
           style={{
-            fontSize: 11,
-            letterSpacing: 2.2,
-            opacity: 0.45,
-            marginBottom: 6,
+            fontSize:
+              11,
+
+            letterSpacing:
+              2.2,
+
+            opacity:
+              0.45,
+
+            marginBottom:
+              6,
           }}
         >
           CURRENT POOL
