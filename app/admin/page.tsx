@@ -62,6 +62,27 @@ export default function AdminPage() {
   const [codeValues, setCodeValues] =
     useState<Record<number, string>>({});
 
+  /*
+    RESCHEDULE VALUES
+  */
+  const [
+    rescheduleDateValues,
+    setRescheduleDateValues,
+  ] =
+    useState<Record<number, string>>({});
+
+  const [
+    rescheduleTimeValues,
+    setRescheduleTimeValues,
+  ] =
+    useState<Record<number, string>>({});
+
+  const [
+    reschedulingId,
+    setReschedulingId,
+  ] =
+    useState<number | null>(null);
+
   const [savingMovie, setSavingMovie] =
     useState(false);
 
@@ -161,6 +182,66 @@ export default function AdminPage() {
         return nextValues;
       }
     );
+
+    /*
+      PRE-FILL RESCHEDULE
+      WITH CURRENT TICKET TIME
+    */
+    setRescheduleDateValues(
+      (currentValues) => {
+        const nextValues = {
+          ...currentValues,
+        };
+
+        items.forEach(
+          (screening) => {
+            if (
+              nextValues[
+                screening.id
+              ] === undefined
+            ) {
+              nextValues[
+                screening.id
+              ] =
+                screening.screening_date ??
+                "";
+            }
+          }
+        );
+
+        return nextValues;
+      }
+    );
+
+    setRescheduleTimeValues(
+      (currentValues) => {
+        const nextValues = {
+          ...currentValues,
+        };
+
+        items.forEach(
+          (screening) => {
+            if (
+              nextValues[
+                screening.id
+              ] === undefined
+            ) {
+              nextValues[
+                screening.id
+              ] =
+                screening.screening_time
+                  ? screening.screening_time.slice(
+                      0,
+                      5
+                    )
+                  : "";
+            }
+          }
+        );
+
+        return nextValues;
+      }
+    );
   }
 
   async function loadShowtimes() {
@@ -197,12 +278,6 @@ export default function AdminPage() {
   useEffect(() => {
     loadAll();
 
-    /*
-      每 30 秒更新时间。
-      即使 Admin 页面一直开着，
-      过期电影也会自动离开
-      NOW BOOKED。
-    */
     const timer =
       window.setInterval(
         () => {
@@ -616,6 +691,147 @@ export default function AdminPage() {
     await loadShowtimes();
   }
 
+  /*
+    RESCHEDULE AN EXISTING TICKET
+  */
+  async function rescheduleScreening(
+    screening: Screening
+  ) {
+    const date =
+      rescheduleDateValues[
+        screening.id
+      ];
+
+    const time =
+      rescheduleTimeValues[
+        screening.id
+      ];
+
+    if (
+      !date ||
+      !time
+    ) {
+      alert(
+        "Please choose both a new date and time."
+      );
+
+      return;
+    }
+
+    const nextDate =
+      new Date(
+        `${date}T${time}`
+      );
+
+    if (
+      Number.isNaN(
+        nextDate.getTime()
+      )
+    ) {
+      alert(
+        "Please choose a valid date and time."
+      );
+
+      return;
+    }
+
+    const ok =
+      confirm(
+        `Reschedule "${screening.movie_title}" to ${date} at ${time}?`
+      );
+
+    if (!ok) {
+      return;
+    }
+
+    setReschedulingId(
+      screening.id
+    );
+
+    /*
+      UPDATE THE TICKET ITSELF
+    */
+    const {
+      error:
+        screeningError,
+    } =
+      await supabase
+        .from("screenings")
+        .update({
+          screening_date:
+            date,
+
+          screening_time:
+            time,
+        })
+        .eq(
+          "id",
+          screening.id
+        );
+
+    if (
+      screeningError
+    ) {
+      setReschedulingId(
+        null
+      );
+
+      alert(
+        screeningError.message
+      );
+
+      return;
+    }
+
+    /*
+      UPDATE THE SHOWTIME THAT
+      THE GUEST PREVIOUSLY CHOSE
+    */
+    const {
+      error:
+        showtimeError,
+    } =
+      await supabase
+        .from("showtimes")
+        .update({
+          screening_date:
+            date,
+
+          screening_time:
+            time,
+        })
+        .eq(
+          "screening_id",
+          screening.id
+        )
+        .eq(
+          "status",
+          "selected"
+        );
+
+    setReschedulingId(
+      null
+    );
+
+    if (
+      showtimeError
+    ) {
+      alert(
+        showtimeError.message
+      );
+
+      await loadAll();
+
+      return;
+    }
+
+    alert(
+      "Screening rescheduled."
+    );
+
+    await loadAll();
+  }
+
   async function cancelScreening(
     screening: Screening
   ) {
@@ -695,13 +911,8 @@ export default function AdminPage() {
     );
 
   /*
-    只把未来的 scheduled
-    screening 当作 NOW BOOKED。
-
-    一旦到达放映时间，
-    就自动从 Admin 消失，
-    但数据库记录不会删除，
-    History 仍然可以正常显示。
+    ONLY FUTURE SCHEDULED
+    SCREENINGS APPEAR HERE
   */
   const scheduledScreenings =
     screenings.filter(
@@ -1093,6 +1304,176 @@ export default function AdminPage() {
                       )}
                     </div>
                   </div>
+                </div>
+
+                {/*
+                  RESCHEDULE
+                */}
+
+                <div
+                  style={{
+                    padding:
+                      18,
+
+                    marginBottom:
+                      18,
+
+                    border:
+                      "1px solid rgba(255,255,255,0.09)",
+
+                    borderRadius:
+                      12,
+
+                    background:
+                      "rgba(255,255,255,0.025)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        11,
+
+                      letterSpacing:
+                        1.8,
+
+                      opacity:
+                        0.5,
+
+                      marginBottom:
+                        14,
+                    }}
+                  >
+                    RESCHEDULE
+                  </div>
+
+                  <div
+                    style={{
+                      display:
+                        "grid",
+
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(140px, 1fr))",
+
+                      gap:
+                        12,
+
+                      marginBottom:
+                        14,
+                    }}
+                  >
+                    <div>
+                      <label
+                        className="label"
+                        style={{
+                          display:
+                            "block",
+
+                          marginBottom:
+                            8,
+                        }}
+                      >
+                        New Date
+                      </label>
+
+                      <input
+                        className="text-input"
+                        type="date"
+                        value={
+                          rescheduleDateValues[
+                            screening.id
+                          ] ?? ""
+                        }
+                        onChange={(
+                          e
+                        ) =>
+                          setRescheduleDateValues(
+                            {
+                              ...rescheduleDateValues,
+
+                              [screening.id]:
+                                e.target.value,
+                            }
+                          )
+                        }
+                        style={{
+                          width:
+                            "100%",
+
+                          boxSizing:
+                            "border-box",
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        className="label"
+                        style={{
+                          display:
+                            "block",
+
+                          marginBottom:
+                            8,
+                        }}
+                      >
+                        New Time
+                      </label>
+
+                      <input
+                        className="text-input"
+                        type="time"
+                        value={
+                          rescheduleTimeValues[
+                            screening.id
+                          ] ?? ""
+                        }
+                        onChange={(
+                          e
+                        ) =>
+                          setRescheduleTimeValues(
+                            {
+                              ...rescheduleTimeValues,
+
+                              [screening.id]:
+                                e.target.value,
+                            }
+                          )
+                        }
+                        style={{
+                          width:
+                            "100%",
+
+                          boxSizing:
+                            "border-box",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    className="primary"
+                    onClick={() =>
+                      rescheduleScreening(
+                        screening
+                      )
+                    }
+                    disabled={
+                      reschedulingId ===
+                      screening.id
+                    }
+                    style={{
+                      width:
+                        "100%",
+
+                      padding:
+                        "12px 16px",
+                    }}
+                  >
+                    {reschedulingId ===
+                    screening.id
+                      ? "Rescheduling…"
+                      : "Reschedule"}
+                  </button>
                 </div>
 
                 <div
