@@ -943,199 +943,128 @@ export default function HomePage() {
   */
 
   function Header() {
-    return (
-      <header
-        className="header"
-        style={{
-          alignItems:
-            "center",
-
-          gap:
-            18,
-        }}
-      >
-        <div>
-          <h1
-            className="brand"
-            style={{
-              marginBottom:
-                4,
-            }}
-          >
-            OUR CINEMA
-          </h1>
-
-          <div className="subtitle">
-            A private cinema for two
-          </div>
-        </div>
+  return (
+    <header
+      className="header"
+      style={{
+        alignItems: "center",
+        gap: 18,
+      }}
+    >
+      <div>
+        <h1
+          className="brand"
+          style={{
+            marginBottom: 4,
+          }}
+        >
+          OUR CINEMA
+        </h1>
 
         <div
           style={{
-            display:
-              "flex",
-
-            gap:
-              9,
-
-            flexWrap:
-              "wrap",
-
-            justifyContent:
-              "flex-end",
+            display: "flex",
+            alignItems: "center",
+            gap: 7,
           }}
         >
+          <div className="subtitle">
+            A private cinema for two
+          </div>
+
           <Link
             href="/notice"
+            aria-label="Notice"
             style={{
-              display:
-                "inline-flex",
-
-              alignItems:
-                "center",
-
-              justifyContent:
-                "center",
-
-              textDecoration:
-                "none",
-
-              color:
-                "inherit",
-
-              padding:
-                "4px 5px",
-
-              minWidth:
-                18,
-
-              fontSize:
-                12,
-
-              lineHeight:
-                1,
-
-              opacity:
-                0.72,
-
-              whiteSpace:
-                "nowrap",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              textDecoration: "none",
+              color: "inherit",
+              fontSize: 11,
+              lineHeight: 1,
+              padding: "2px 3px",
+              opacity: 0.6,
+              whiteSpace: "nowrap",
             }}
           >
             ✉
-
-            {unreadNoticeCount >
-              0 && (
+            {unreadNoticeCount > 0 && (
               <span
                 style={{
-                  marginLeft:
-                    3,
-
-                  fontSize:
-                    8,
-
-                  fontWeight:
-                    600,
+                  marginLeft: 2,
+                  fontSize: 7,
+                  fontWeight: 600,
                 }}
               >
-                {unreadNoticeCount >
-                9
+                {unreadNoticeCount > 9
                   ? "9+"
                   : unreadNoticeCount}
               </span>
             )}
           </Link>
-
-          <Link
-            href="/ticket"
-            className="primary"
-            style={{
-              display:
-                "inline-flex",
-
-              alignItems:
-                "center",
-
-              textDecoration:
-                "none",
-
-              padding:
-                "10px 15px",
-
-              fontSize:
-                13,
-
-              fontWeight:
-                600,
-
-              whiteSpace:
-                "nowrap",
-            }}
-          >
-            🎟 Tickets
-          </Link>
-
-          <Link
-            href="/history"
-            className="secondary"
-            style={{
-              display:
-                "inline-flex",
-
-              alignItems:
-                "center",
-
-              textDecoration:
-                "none",
-
-              padding:
-                "10px 15px",
-
-              fontSize:
-                13,
-
-              fontWeight:
-                600,
-
-              whiteSpace:
-                "nowrap",
-            }}
-          >
-            ◷ History
-          </Link>
-
-          <Link
-            href="/festival"
-            className="secondary"
-            style={{
-              display:
-                "inline-flex",
-
-              alignItems:
-                "center",
-
-              textDecoration:
-                "none",
-
-              padding:
-                "10px 15px",
-
-              fontSize:
-                13,
-
-              fontWeight:
-                600,
-
-              whiteSpace:
-                "nowrap",
-            }}
-          >
-            ✦ Special Festival
-          </Link>
         </div>
-      </header>
-    );
-  }
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 9,
+          flexWrap: "nowrap",
+          justifyContent: "flex-end",
+        }}
+      >
+        <Link
+          href="/ticket"
+          className="primary"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            textDecoration: "none",
+            padding: "10px 15px",
+            fontSize: 13,
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+          }}
+        >
+          🎟 Tickets
+        </Link>
+
+        <Link
+          href="/history"
+          className="secondary"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            textDecoration: "none",
+            padding: "10px 15px",
+            fontSize: 13,
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+          }}
+        >
+          ◷ History
+        </Link>
+
+        <Link
+          href="/festival"
+          className="secondary"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            textDecoration: "none",
+            padding: "10px 15px",
+            fontSize: 13,
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+          }}
+        >
+          ✦ Special Festival
+        </Link>
+      </div>
+    </header>
+  );
+}
 
   /*
     RATING STARS
