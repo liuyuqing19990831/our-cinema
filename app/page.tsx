@@ -37,18 +37,23 @@ type Screening = {
 type Showtime = {
   id: number;
   created_at: string;
-
   screening_id: number;
-
   screening_date: string;
   screening_time: string;
-
   status: string;
 };
 
 type ShowtimeChoice = {
   screening: Screening;
   showtime: Showtime;
+};
+
+type Notice = {
+  id: number;
+  created_at: string;
+  message: string;
+  is_read: boolean;
+  popup_shown: boolean;
 };
 
 export default function HomePage() {
@@ -124,6 +129,65 @@ export default function HomePage() {
     );
   }
 
+  async function showNewNoticePopups() {
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("notices")
+      .select("*")
+      .eq(
+        "popup_shown",
+        false
+      )
+      .order(
+        "created_at",
+        {
+          ascending: true,
+        }
+      );
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    const notices =
+      (data ?? []) as Notice[];
+
+    for (
+      const notice
+      of notices
+    ) {
+      const {
+        error:
+          updateError,
+      } = await supabase
+        .from("notices")
+        .update({
+          popup_shown:
+            true,
+        })
+        .eq(
+          "id",
+          notice.id
+        );
+
+      if (updateError) {
+        console.error(
+          updateError
+        );
+        continue;
+      }
+
+      window.alert(
+        `NOTICE\n\n${notice.message}`
+      );
+    }
+
+    await loadUnreadNotices();
+  }
+
   /*
     RATING POPUP
   */
@@ -156,10 +220,6 @@ export default function HomePage() {
     savingRating,
     setSavingRating,
   ] = useState(false);
-
-  /*
-    LOAD HOME PAGE
-  */
 
   async function loadData() {
     setLoading(true);
@@ -227,7 +287,6 @@ export default function HomePage() {
       );
 
       setLoading(false);
-
       return;
     }
 
@@ -248,7 +307,6 @@ export default function HomePage() {
       );
 
       setLoading(false);
-
       return;
     }
 
@@ -298,7 +356,6 @@ export default function HomePage() {
       );
 
       setLoading(false);
-
       return;
     }
 
@@ -349,11 +406,6 @@ export default function HomePage() {
     setLoading(false);
   }
 
-  /*
-    CHECK ONE-TIME
-    RATING POPUP
-  */
-
   async function checkRatingPrompt() {
     const {
       data,
@@ -396,7 +448,6 @@ export default function HomePage() {
       console.error(
         error
       );
-
       return;
     }
 
@@ -454,7 +505,6 @@ export default function HomePage() {
       console.error(
         updateError
       );
-
       return;
     }
 
@@ -474,10 +524,9 @@ export default function HomePage() {
   useEffect(() => {
     async function initialize() {
       await loadData();
-
       await checkRatingPrompt();
-
       await loadUnreadNotices();
+      await showNewNoticePopups();
     }
 
     initialize();
@@ -553,8 +602,10 @@ export default function HomePage() {
             table:
               "notices",
           },
-          () =>
-            loadUnreadNotices()
+          () => {
+            loadUnreadNotices();
+            showNewNoticePopups();
+          }
         )
         .subscribe();
 
@@ -576,10 +627,6 @@ export default function HomePage() {
       );
     };
   }, []);
-
-  /*
-    NORMAL MOVIE PICK
-  */
 
   function randomPick() {
     if (
@@ -615,16 +662,12 @@ export default function HomePage() {
       .insert({
         movie_id:
           movie.id,
-
         movie_title:
           movie.title,
-
         poster_url:
           movie.poster_url,
-
         status:
           "waiting_schedule",
-
         festival_id:
           null,
       });
@@ -667,7 +710,6 @@ export default function HomePage() {
       alert(
         movieError.message
       );
-
       return;
     }
 
@@ -677,10 +719,6 @@ export default function HomePage() {
 
     await loadData();
   }
-
-  /*
-    CHOOSE SHOWTIME
-  */
 
   async function confirmShowtime(
     screening:
@@ -716,7 +754,6 @@ export default function HomePage() {
       alert(
         showtimeError.message
       );
-
       return;
     }
 
@@ -747,13 +784,10 @@ export default function HomePage() {
       .update({
         status:
           "scheduled",
-
         screening_date:
           showtime.screening_date,
-
         screening_time:
           showtime.screening_time,
-
         rating_prompt_shown:
           false,
       })
@@ -770,7 +804,6 @@ export default function HomePage() {
       alert(
         screeningError.message
       );
-
       return;
     }
 
@@ -782,10 +815,6 @@ export default function HomePage() {
       "/ticket"
     );
   }
-
-  /*
-    RATINGS
-  */
 
   function chooseRating(
     person:
@@ -833,15 +862,12 @@ export default function HomePage() {
       .update({
         niu_rating:
           niuRating,
-
         xia_rating:
           xiaRating,
-
         niu_rated_at:
           niuRating
             ? now
             : null,
-
         xia_rated_at:
           xiaRating
             ? now
@@ -860,7 +886,6 @@ export default function HomePage() {
       alert(
         error.message
       );
-
       return;
     }
 
@@ -882,10 +907,6 @@ export default function HomePage() {
       "/history"
     );
   }
-
-  /*
-    DATE FORMAT
-  */
 
   function formatDate(
     date: string
@@ -920,10 +941,8 @@ export default function HomePage() {
       {
         month:
           "short",
-
         day:
           "numeric",
-
         year:
           "numeric",
       }
@@ -938,137 +957,176 @@ export default function HomePage() {
     );
   }
 
-  /*
-    HEADER
-  */
-
   function Header() {
-  return (
-    <header
-      className="header"
-      style={{
-        alignItems: "center",
-        gap: 18,
-      }}
-    >
-      <div>
-        <h1
-          className="brand"
-          style={{
-            marginBottom: 4,
-          }}
-        >
-          OUR CINEMA
-        </h1>
+    return (
+      <header
+        className="header"
+        style={{
+          alignItems:
+            "center",
+          gap:
+            18,
+        }}
+      >
+        <div>
+          <h1
+            className="brand"
+            style={{
+              marginBottom:
+                4,
+            }}
+          >
+            OUR CINEMA
+          </h1>
+
+          <div
+            style={{
+              display:
+                "flex",
+              alignItems:
+                "center",
+              gap:
+                7,
+            }}
+          >
+            <div className="subtitle">
+              A private cinema for two
+            </div>
+
+            <Link
+              href="/notice"
+              aria-label="Notice"
+              style={{
+                display:
+                  "inline-flex",
+                alignItems:
+                  "center",
+                justifyContent:
+                  "center",
+                textDecoration:
+                  "none",
+                color:
+                  "inherit",
+                fontSize:
+                  11,
+                lineHeight:
+                  1,
+                padding:
+                  "2px 3px",
+                opacity:
+                  0.6,
+                whiteSpace:
+                  "nowrap",
+              }}
+            >
+              ✉
+
+              {unreadNoticeCount >
+                0 && (
+                <span
+                  style={{
+                    marginLeft:
+                      2,
+                    fontSize:
+                      7,
+                    fontWeight:
+                      600,
+                  }}
+                >
+                  {unreadNoticeCount >
+                  9
+                    ? "9+"
+                    : unreadNoticeCount}
+                </span>
+              )}
+            </Link>
+          </div>
+        </div>
 
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 7,
+            display:
+              "flex",
+            gap:
+              9,
+            flexWrap:
+              "nowrap",
+            justifyContent:
+              "flex-end",
           }}
         >
-          <div className="subtitle">
-            A private cinema for two
-          </div>
-
           <Link
-            href="/notice"
-            aria-label="Notice"
+            href="/ticket"
+            className="primary"
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              textDecoration: "none",
-              color: "inherit",
-              fontSize: 11,
-              lineHeight: 1,
-              padding: "2px 3px",
-              opacity: 0.6,
-              whiteSpace: "nowrap",
+              display:
+                "inline-flex",
+              alignItems:
+                "center",
+              textDecoration:
+                "none",
+              padding:
+                "10px 15px",
+              fontSize:
+                13,
+              fontWeight:
+                600,
+              whiteSpace:
+                "nowrap",
             }}
           >
-            ✉
-            {unreadNoticeCount > 0 && (
-              <span
-                style={{
-                  marginLeft: 2,
-                  fontSize: 7,
-                  fontWeight: 600,
-                }}
-              >
-                {unreadNoticeCount > 9
-                  ? "9+"
-                  : unreadNoticeCount}
-              </span>
-            )}
+            🎟 Tickets
+          </Link>
+
+          <Link
+            href="/history"
+            className="secondary"
+            style={{
+              display:
+                "inline-flex",
+              alignItems:
+                "center",
+              textDecoration:
+                "none",
+              padding:
+                "10px 15px",
+              fontSize:
+                13,
+              fontWeight:
+                600,
+              whiteSpace:
+                "nowrap",
+            }}
+          >
+            ◷ History
+          </Link>
+
+          <Link
+            href="/festival"
+            className="secondary"
+            style={{
+              display:
+                "inline-flex",
+              alignItems:
+                "center",
+              textDecoration:
+                "none",
+              padding:
+                "10px 15px",
+              fontSize:
+                13,
+              fontWeight:
+                600,
+              whiteSpace:
+                "nowrap",
+            }}
+          >
+            ✦ Special Festival
           </Link>
         </div>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          gap: 9,
-          flexWrap: "nowrap",
-          justifyContent: "flex-end",
-        }}
-      >
-        <Link
-          href="/ticket"
-          className="primary"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            textDecoration: "none",
-            padding: "10px 15px",
-            fontSize: 13,
-            fontWeight: 600,
-            whiteSpace: "nowrap",
-          }}
-        >
-          🎟 Tickets
-        </Link>
-
-        <Link
-          href="/history"
-          className="secondary"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            textDecoration: "none",
-            padding: "10px 15px",
-            fontSize: 13,
-            fontWeight: 600,
-            whiteSpace: "nowrap",
-          }}
-        >
-          ◷ History
-        </Link>
-
-        <Link
-          href="/festival"
-          className="secondary"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            textDecoration: "none",
-            padding: "10px 15px",
-            fontSize: 13,
-            fontWeight: 600,
-            whiteSpace: "nowrap",
-          }}
-        >
-          ✦ Special Festival
-        </Link>
-      </div>
-    </header>
-  );
-}
-
-  /*
-    RATING STARS
-  */
+      </header>
+    );
+  }
 
   function RatingStars({
     label,
@@ -1090,7 +1148,6 @@ export default function HomePage() {
         style={{
           padding:
             "17px 0",
-
           borderTop:
             "1px solid rgba(255,255,255,0.08)",
         }}
@@ -1099,13 +1156,10 @@ export default function HomePage() {
           style={{
             display:
               "flex",
-
             justifyContent:
               "space-between",
-
             alignItems:
               "center",
-
             marginBottom:
               12,
           }}
@@ -1114,7 +1168,6 @@ export default function HomePage() {
             style={{
               fontSize:
                 16,
-
               fontWeight:
                 650,
             }}
@@ -1126,7 +1179,6 @@ export default function HomePage() {
             style={{
               fontSize:
                 12,
-
               opacity:
                 0.45,
             }}
@@ -1141,19 +1193,14 @@ export default function HomePage() {
           style={{
             display:
               "grid",
-
             gridTemplateColumns:
               "repeat(5, 1fr)",
-
             gap:
               4,
-
             width:
               "100%",
-
             maxWidth:
               180,
-
             margin:
               "0 auto",
           }}
@@ -1174,25 +1221,18 @@ export default function HomePage() {
                 style={{
                   border:
                     "none",
-
                   background:
                     "transparent",
-
                   padding:
                     0,
-
                   cursor:
                     "pointer",
-
                   fontSize:
                     22,
-
                   lineHeight:
                     1,
-
                   width:
                     "100%",
-
                   color:
                     rating &&
                     star <=
@@ -1242,13 +1282,10 @@ export default function HomePage() {
               style={{
                 fontSize:
                   10,
-
                 letterSpacing:
                   2.4,
-
                 opacity:
                   0.4,
-
                 marginBottom:
                   6,
               }}
@@ -1260,7 +1297,6 @@ export default function HomePage() {
               style={{
                 margin:
                   0,
-
                 fontSize:
                   25,
               }}
@@ -1273,7 +1309,6 @@ export default function HomePage() {
             style={{
               display:
                 "grid",
-
               gap:
                 18,
             }}
@@ -1302,16 +1337,12 @@ export default function HomePage() {
                       style={{
                         display:
                           "grid",
-
                         gridTemplateColumns:
                           "90px minmax(0, 1fr)",
-
                         gap:
                           18,
-
                         alignItems:
                           "center",
-
                         marginBottom:
                           showtimes.length >
                           0
@@ -1329,13 +1360,10 @@ export default function HomePage() {
                         style={{
                           width:
                             90,
-
                           aspectRatio:
                             "2 / 3",
-
                           objectFit:
                             "cover",
-
                           borderRadius:
                             10,
                         }}
@@ -1351,13 +1379,10 @@ export default function HomePage() {
                           style={{
                             fontSize:
                               10,
-
                             letterSpacing:
                               2,
-
                             opacity:
                               0.42,
-
                             marginBottom:
                               7,
                           }}
@@ -1369,10 +1394,8 @@ export default function HomePage() {
                           style={{
                             fontSize:
                               23,
-
                             lineHeight:
                               1.15,
-
                             margin:
                               "0 0 9px",
                           }}
@@ -1386,10 +1409,8 @@ export default function HomePage() {
                           style={{
                             fontSize:
                               12,
-
                             opacity:
                               0.5,
-
                             lineHeight:
                               1.5,
                           }}
@@ -1409,7 +1430,6 @@ export default function HomePage() {
                         style={{
                           textAlign:
                             "center",
-
                           padding:
                             "18px 0 4px",
                         }}
@@ -1421,7 +1441,6 @@ export default function HomePage() {
                         style={{
                           display:
                             "grid",
-
                           gap:
                             10,
                         }}
@@ -1439,7 +1458,6 @@ export default function HomePage() {
                                 setChosenShowtime(
                                   {
                                     screening,
-
                                     showtime,
                                   }
                                 )
@@ -1447,22 +1465,16 @@ export default function HomePage() {
                               style={{
                                 width:
                                   "100%",
-
                                 padding:
                                   "15px 17px",
-
                                 textAlign:
                                   "left",
-
                                 display:
                                   "flex",
-
                                 justifyContent:
                                   "space-between",
-
                                 alignItems:
                                   "center",
-
                                 gap:
                                   16,
                               }}
@@ -1501,16 +1513,12 @@ export default function HomePage() {
         style={{
           display:
             "flex",
-
           justifyContent:
             "space-between",
-
           alignItems:
             "flex-end",
-
           gap:
             18,
-
           marginBottom:
             20,
         }}
@@ -1520,13 +1528,10 @@ export default function HomePage() {
             style={{
               fontSize:
                 10,
-
               letterSpacing:
                 2.4,
-
               opacity:
                 0.4,
-
               marginBottom:
                 6,
             }}
@@ -1538,7 +1543,6 @@ export default function HomePage() {
             style={{
               margin:
                 0,
-
               fontSize:
                 25,
             }}
@@ -1557,7 +1561,6 @@ export default function HomePage() {
             style={{
               padding:
                 "11px 17px",
-
               whiteSpace:
                 "nowrap",
             }}
@@ -1574,7 +1577,6 @@ export default function HomePage() {
           style={{
             textAlign:
               "center",
-
             padding:
               "48px 24px",
           }}
@@ -1583,7 +1585,6 @@ export default function HomePage() {
             style={{
               fontSize:
                 38,
-
               marginBottom:
                 14,
             }}
@@ -1595,10 +1596,8 @@ export default function HomePage() {
             style={{
               fontSize:
                 20,
-
               fontWeight:
                 650,
-
               marginBottom:
                 8,
             }}
@@ -1683,13 +1682,10 @@ export default function HomePage() {
               style={{
                 fontSize:
                   10,
-
                 letterSpacing:
                   2,
-
                 opacity:
                   0.4,
-
                 marginTop:
                   15,
               }}
@@ -1815,7 +1811,6 @@ export default function HomePage() {
                   confirmShowtime(
                     chosenShowtime
                       .screening,
-
                     chosenShowtime
                       .showtime
                   )
@@ -1866,13 +1861,10 @@ export default function HomePage() {
               style={{
                 fontSize:
                   10,
-
                 letterSpacing:
                   2,
-
                 opacity:
                   0.4,
-
                 marginTop:
                   16,
               }}
