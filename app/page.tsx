@@ -57,19 +57,11 @@ export default function HomePage() {
   const [movies, setMovies] =
     useState<Movie[]>([]);
 
-  /*
-    所有还在等待用户
-    选择时间的电影
-  */
   const [
     screenings,
     setScreenings,
   ] = useState<Screening[]>([]);
 
-  /*
-    每一部 screening
-    都有自己的 showtimes
-  */
   const [
     showtimesByScreening,
     setShowtimesByScreening,
@@ -97,6 +89,40 @@ export default function HomePage() {
 
   const [working, setWorking] =
     useState(false);
+
+  /*
+    NOTICE
+  */
+
+  const [
+    unreadNoticeCount,
+    setUnreadNoticeCount,
+  ] = useState(0);
+
+  async function loadUnreadNotices() {
+    const {
+      count,
+      error,
+    } = await supabase
+      .from("notices")
+      .select("*", {
+        count: "exact",
+        head: true,
+      })
+      .eq(
+        "is_read",
+        false
+      );
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setUnreadNoticeCount(
+      count ?? 0
+    );
+  }
 
   /*
     RATING POPUP
@@ -138,10 +164,6 @@ export default function HomePage() {
   async function loadData() {
     setLoading(true);
 
-    /*
-      AVAILABLE MOVIES
-    */
-
     const {
       data: movieData,
       error: movieError,
@@ -169,11 +191,6 @@ export default function HomePage() {
       (movieData ??
         []) as Movie[]
     );
-
-    /*
-      LOAD ALL MOVIES
-      WAITING FOR SCHEDULE
-    */
 
     const {
       data:
@@ -221,11 +238,6 @@ export default function HomePage() {
     setScreenings(
       waitingScreenings
     );
-
-    /*
-      LOAD SHOWTIMES FOR
-      ALL WAITING MOVIES
-    */
 
     if (
       waitingScreenings.length ===
@@ -422,10 +434,6 @@ export default function HomePage() {
       return;
     }
 
-    /*
-      MARK AS SHOWN FIRST
-    */
-
     const {
       error:
         updateError,
@@ -468,6 +476,8 @@ export default function HomePage() {
       await loadData();
 
       await checkRatingPrompt();
+
+      await loadUnreadNotices();
     }
 
     initialize();
@@ -529,6 +539,25 @@ export default function HomePage() {
         )
         .subscribe();
 
+    const noticeChannel =
+      supabase
+        .channel(
+          "guest-notices-live"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema:
+              "public",
+            table:
+              "notices",
+          },
+          () =>
+            loadUnreadNotices()
+        )
+        .subscribe();
+
     return () => {
       supabase.removeChannel(
         movieChannel
@@ -540,6 +569,10 @@ export default function HomePage() {
 
       supabase.removeChannel(
         showtimeChannel
+      );
+
+      supabase.removeChannel(
+        noticeChannel
       );
     };
   }, []);
@@ -574,10 +607,6 @@ export default function HomePage() {
   ) {
     setWorking(true);
 
-    /*
-      CREATE SCREENING
-    */
-
     const {
       error:
         screeningError,
@@ -611,11 +640,6 @@ export default function HomePage() {
 
       return;
     }
-
-    /*
-      REMOVE FROM
-      AVAILABLE POOL
-    */
 
     const {
       error:
@@ -666,11 +690,6 @@ export default function HomePage() {
   ) {
     setWorking(true);
 
-    /*
-      MARK CHOSEN
-      SHOWTIME SELECTED
-    */
-
     const {
       error:
         showtimeError,
@@ -701,11 +720,6 @@ export default function HomePage() {
       return;
     }
 
-    /*
-      CANCEL OTHER TIMES
-      FOR THIS MOVIE ONLY
-    */
-
     await supabase
       .from("showtimes")
       .update({
@@ -724,11 +738,6 @@ export default function HomePage() {
         "status",
         "available"
       );
-
-    /*
-      CREATE TICKET
-      FOR THIS MOVIE ONLY
-    */
 
     const {
       error:
@@ -977,6 +986,67 @@ export default function HomePage() {
           }}
         >
           <Link
+            href="/notice"
+            style={{
+              display:
+                "inline-flex",
+
+              alignItems:
+                "center",
+
+              justifyContent:
+                "center",
+
+              textDecoration:
+                "none",
+
+              color:
+                "inherit",
+
+              padding:
+                "4px 5px",
+
+              minWidth:
+                18,
+
+              fontSize:
+                12,
+
+              lineHeight:
+                1,
+
+              opacity:
+                0.72,
+
+              whiteSpace:
+                "nowrap",
+            }}
+          >
+            ✉
+
+            {unreadNoticeCount >
+              0 && (
+              <span
+                style={{
+                  marginLeft:
+                    3,
+
+                  fontSize:
+                    8,
+
+                  fontWeight:
+                    600,
+                }}
+              >
+                {unreadNoticeCount >
+                9
+                  ? "9+"
+                  : unreadNoticeCount}
+              </span>
+            )}
+          </Link>
+
+          <Link
             href="/ticket"
             className="primary"
             style={{
@@ -1224,11 +1294,6 @@ export default function HomePage() {
   return (
     <main className="shell">
       <Header />
-
-      {/*
-        ALL SELECTED FILMS
-        WAITING FOR SCHEDULE
-      */}
 
       {screenings.length >
         0 && (
@@ -1503,11 +1568,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/*
-        NORMAL PERMANENT
-        MOVIE POOL
-      */}
-
       <div
         style={{
           display:
@@ -1664,10 +1724,6 @@ export default function HomePage() {
         </section>
       )}
 
-      {/*
-        CONFIRM NORMAL MOVIE
-      */}
-
       {chosenMovie && (
         <div
           className="modal-backdrop"
@@ -1756,10 +1812,6 @@ export default function HomePage() {
           </div>
         </div>
       )}
-
-      {/*
-        CONFIRM SHOWTIME
-      */}
 
       {chosenShowtime && (
         <div
@@ -1862,10 +1914,6 @@ export default function HomePage() {
           </div>
         </div>
       )}
-
-      {/*
-        ONE-TIME RATING POPUP
-      */}
 
       {ratingScreening && (
         <div className="modal-backdrop">
