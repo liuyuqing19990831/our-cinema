@@ -75,7 +75,8 @@ export default function FestivalPage() {
     setLoading(true);
 
     /*
-      FIND ACTIVE FESTIVAL
+      LOAD ALL FESTIVALS
+      DATE CONTROLS VISIBILITY
     */
 
     const {
@@ -86,18 +87,13 @@ export default function FestivalPage() {
     } = await supabase
       .from("festivals")
       .select("*")
-      .eq(
-        "status",
-        "active"
-      )
       .order(
-        "created_at",
+        "start_date",
         {
           ascending:
-            false,
+            true,
         }
-      )
-      .limit(1);
+      );
 
     if (
       festivalError
@@ -121,15 +117,9 @@ export default function FestivalPage() {
       return;
     }
 
-    const activeFestival =
-      festivalData &&
-      festivalData.length >
-        0
-        ? (festivalData[0] as Festival)
-        : null;
-
     /*
-      CHECK DATE RANGE
+      FIND FESTIVAL WHOSE
+      DATE RANGE INCLUDES TODAY
     */
 
     const today =
@@ -138,13 +128,16 @@ export default function FestivalPage() {
       );
 
     const visibleFestival =
-      activeFestival &&
-      activeFestival.start_date <=
-        today &&
-      activeFestival.end_date >=
-        today
-        ? activeFestival
-        : null;
+      (
+        (festivalData ??
+          []) as Festival[]
+      ).find(
+        (item) =>
+          item.start_date <=
+            today &&
+          item.end_date >=
+            today
+      ) ?? null;
 
     setFestival(
       visibleFestival
@@ -216,7 +209,6 @@ export default function FestivalPage() {
       FIND ONLY CURRENTLY
       CHOSEN FESTIVAL FILMS
 
-      IMPORTANT:
       cancelled / old records
       do NOT hide a film
     */
@@ -580,7 +572,6 @@ export default function FestivalPage() {
 
     /*
       RELOAD FROM DATABASE
-      TO KEEP STATE ACCURATE
     */
 
     await loadFestival();
